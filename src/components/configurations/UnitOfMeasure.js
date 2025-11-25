@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../general/constants";
 import { toast, ToastContainer } from "react-toastify";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
+import { fetchUoms } from "../products/products_helper"; //import fetch uoms defined in uoms
 
 function UnitOfMeasure() {
     const token = localStorage.getItem("access_token");
@@ -11,38 +12,19 @@ function UnitOfMeasure() {
     const [loading, setLoading] = useState(true);
     const [uoms, setUoms] = useState([]);
 
-    // Fetch all Unit Of Measures
-    const fetchUoms = async () => {
-        try {
-            const res = await axios.get(
-                `${API_BASE_URL}config/getUnitOfMeasure`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: "application/json",
-                    },
-                }
-            );
 
-            if (res.data.success) {
-                const formatted = res.data.uoms.map((u) => ({
-                    id: u.id,
-                    name: u.name,
-                    uom_code: u.uom_code,
-                }));
-                setUoms(formatted);
-            }
-        } catch (error) {
-            console.error("Error fetching UOM:", error);
-            toast.error("Failed to load Unit of Measures");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    //Use effect to load uoms
     useEffect(() => {
-        fetchUoms();
-    }, []);
+        const loadUoms = async () => {
+            setLoading(true);
+            const data = await fetchUoms(token); //use unit of measures defined in helper
+            setUoms(data); //set Uoms in state
+            setLoading(false);
+        };
+
+        loadUoms();
+    }, [token]);
+
 
     const [searchQuery, setSearchQuery] = useState("");
 
@@ -170,7 +152,7 @@ function UnitOfMeasure() {
         <>
             <ToastContainer />
             <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8">
-                <div className="max-w-7xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <div className="w-full bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
 
                     {/* Header */}
                     <div className="flex flex-col md:flex-row justify-between mb-6">

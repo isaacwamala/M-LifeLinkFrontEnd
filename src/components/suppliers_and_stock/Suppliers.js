@@ -291,7 +291,7 @@ function Suppliers() {
         <>
             <ToastContainer />
             <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8 transition-colors duration-300 dashboard">
-                <div className="w-full max-w-7xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                             Supplier Management

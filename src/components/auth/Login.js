@@ -99,7 +99,7 @@ function Login() {
                             <Heart className="w-10 h-10 text-white" fill="currentColor" />
                         </div>
                         <h1 className="text-white mb-2 tracking-wide">WELCOME TO</h1>
-                        <h2 className="text-white tracking-wider">MUTIMA LIFE LINK</h2>
+                        <h2 className="text-white tracking-wider">XXXXXXXX</h2>
                         <h3 className="text-white mt-1">VIRTUAL MEDICAL CENTER</h3>
                         <div className="w-24 h-1 bg-gradient-to-r from-transparent via-white to-transparent mx-auto mt-4"></div>
                     </div>

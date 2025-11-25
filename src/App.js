@@ -12,11 +12,15 @@ import AccountSettings from "./components/useraccounts/AccountSettings.js";
 import SetNewPassword from "./components/auth/forGotPassWord/SetNewPassword.js";
 import ForGotPassword from "./components/auth/forGotPassWord/ForGotPassWord.js";
 import Suppliers from "./components/suppliers_and_stock/Suppliers.js";
+import WareHouses from "./components/suppliers_and_stock/WareHouses.js";
 import Categories from "./components/products/Categories.js";
 import UnitOfMeasure from "./components/configurations/UnitOfMeasure.js";
 
 import NotificationsPage from "./components/notifications/NotificationsPage.js";
+import MedicalSuppliesItems from "./components/products/MedicalSuppliesItems.js";
+import RegisterMedicalStock from "./components/products/RegisterMedicalStock.js";
 
+import UomConversionForProductBaseUnit from "./components/configurations/UomConversionForProductBaseUnit.js";
 
 function App() {
   return (
@@ -51,10 +55,20 @@ function App() {
 
                 {/* Suppliers and stock */}
                 <Route path="/suppliers" element={<Suppliers />} />
+                <Route path="/warehouses" element={<WareHouses/>} />
                 <Route path="/categories" element={<Categories />} />
+
+                {/* Configurations */}
                 <Route path="/unit_of_measure" element={<UnitOfMeasure />} />
+                <Route path="/convert_different_uoms_in_terms_of_product_base_unit" element={<UomConversionForProductBaseUnit/>}/>
 
                 <Route path="/notifications" element={<NotificationsPage />} />
+
+                {/* Medical supply item */}
+                <Route path="/medical_supply_items" element={<MedicalSuppliesItems/>}/>
+                <Route path="/register_medical_stock" element={<RegisterMedicalStock/>}/>
+
+
 
               </Routes>
 

@@ -6,44 +6,27 @@ import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
+//import categories from the helper
+import { fetchProductCategories } from "./products_helper";
+
+
 function Categories() {
 
     const token = localStorage.getItem('access_token');
     const [loading, setLoading] = useState(true);
     const [categories, setCategories] = useState([]); //initialize state 
 
-    // Fetch suppliers
-    const fetchProductCategories = async () => {
-        try {
-            const response = await axios.get(`${API_BASE_URL}config/getCategories`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-            });
-            if (response.data.success) {
-                //  toast.success("Suppliers loaded successfully"); // Optional
-                const formatted = response.data.categories.map(c => ({
-                    id: c.id,
-                    name: c.name,
-
-                }));
-
-                setCategories(formatted);
-                console.log("Categories loaded:", formatted);
-
-            }
-
-        } catch (error) {
-            console.error("Error fetching Categories:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    //Use product categories from the products helper
     useEffect(() => {
-        fetchProductCategories(); // Fetch suppliers on component mount
-    }, []);
+        const loadCategories = async () => {
+            setLoading(true);
+            const data = await fetchProductCategories(token);
+            setCategories(data);
+            setLoading(false);
+        };
+
+        loadCategories();
+    }, [token]);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -185,7 +168,7 @@ function Categories() {
         <>
             <ToastContainer />
             <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8 transition-colors duration-300 dashboard">
-                <div className="w-full max-w-7xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                             Products Category Management

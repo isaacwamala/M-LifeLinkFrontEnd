@@ -41,6 +41,22 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Preferences", icon: Folder, link: "/settings/preferences" },
       ]
     },
+
+    // Ware house and supplier management
+       {
+      icon: Settings,
+      label: "Warehouse/Suppliers",
+      hasDropdown: true,
+      children: [
+        { label: "Suppliers", icon: Settings, link: "/suppliers" },
+        { label: "Security", icon: Shield, link: "/settings/security" },
+        { label: "Preferences", icon: Folder, link: "/settings/preferences" },
+      ]
+    },
+
+
+
+
   ];
 
   const toggleDropdown = (index) => {

@@ -193,7 +193,7 @@ function UserAccountLists() {
                 user_status: status,
             };
             console.log('Submitting status update:', { id: selectedUser.id, user_status: status });
-            const response = await axios.put(`${API_BASE_URL}updateUserAccount`, userData, {
+            const response = await axios.post(`${API_BASE_URL}updateUserAccount`, userData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
