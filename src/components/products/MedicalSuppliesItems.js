@@ -257,7 +257,7 @@ export default function MedicalSuppliesItems() {
             closeModal();
         } catch (error) {
             console.error("API Error:", error.response?.data || error.message || error);
-            toast.error("Failed to submit product. Check console for details.");
+            toast.error(error.response?.data.message);
         } finally {
             setSubmitting(false); // stop loader
         }
@@ -308,7 +308,7 @@ export default function MedicalSuppliesItems() {
     return (
         <>
             <ToastContainer />
-            <div className="min-h-screen bg-white dark:bg-gray-800 text-gray-900 dark:text-white p-4 md:p-8">
+                         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
                 <div className="w-full">
                     {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg shadow">
@@ -374,8 +374,8 @@ export default function MedicalSuppliesItems() {
                                     <div className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Total Products</p>
-                                                <p className="text-3xl">{stats.total}</p>
+                                                <p className="text-gray-700 dark:text-gray-100 mb-1">Total Products</p>
+                                                <p className="text-3xl text-gray-700 dark:text-gray-300">{stats.total}</p>
                                             </div>
                                             <Package className="w-12 h-12 text-blue-500" />
                                         </div>
@@ -385,8 +385,8 @@ export default function MedicalSuppliesItems() {
                                     <div className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Categories</p>
-                                                <p className="text-3xl">{stats.categories}</p>
+                                                <p className="text-gray-700 dark:text-gray-300 mb-1">Categories</p>
+                                                <p className="text-3xl text-gray-700 dark:text-gray-300">{stats.categories}</p>
                                             </div>
                                             <TrendingUp className="w-12 h-12 text-green-500" />
                                         </div>
@@ -396,8 +396,8 @@ export default function MedicalSuppliesItems() {
                                     <div className="bg-gray-100 dark:bg-gray-700 p-6 rounded-lg">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-gray-500 dark:text-gray-400 mb-1">Tracked Items</p>
-                                                <p className="text-3xl">{stats.lowStock}</p>
+                                                <p className="text-gray-700 dark:text-gray-300 mb-1">Tracked Items</p>
+                                                <p className="text-3xl text-gray-700 dark:text-gray-300">{stats.lowStock}</p>
                                             </div>
                                             <AlertCircle className="w-12 h-12 text-yellow-500" />
                                         </div>
@@ -458,14 +458,14 @@ export default function MedicalSuppliesItems() {
                                         <table className="w-full">
                                             <thead className="bg-gray-200 dark:bg-gray-600">
                                                 <tr>
-                                                    <th className="px-4 py-3 text-left">Name</th>
-                                                    <th className="px-4 py-3 text-left">SKU</th>
-                                                    <th className="px-4 py-3 text-left">Barcode</th>
-                                                    <th className="px-4 py-3 text-left">Category</th>
-                                                    <th className="px-4 py-3 text-left">UOM</th>
-                                                    <th className="px-4 py-3 text-left">Min/Max</th>
-                                                    <th className="px-4 py-3 text-left">Created</th>
-                                                    <th className="px-4 py-3 text-left">Actions</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Name</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">SKU</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Barcode</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Category</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Base UOM</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Min/Max</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Created</th>
+                                                    <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -481,20 +481,18 @@ export default function MedicalSuppliesItems() {
                                                             key={product.id}
                                                             className="border-t border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                                                         >
-                                                            <td className="px-4 py-3">{product.name}</td>
+                                                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{product.name}</td>
                                                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{product.sku}</td>
                                                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{product.barcode}</td>
-                                                            <td className="px-4 py-3">
-                                                                <span className="bg-blue-600 px-2 py-1 rounded text-sm text-white">
-                                                                    {product.category?.name || 'N/A'}
-                                                                </span>
-                                                            </td>
+                                                            <td className="px-4 py-3"><span className="inline-flex items-center whitespace-nowrap px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">{product.category?.name || 'N/A'}</span></td>
+
                                                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{product.uom.name}</td>
+
                                                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                                                {product.minimum_order_level}/{product.maximum_stock_level}
-                                                            </td>
+                                                                {product.minimum_order_level} / {product.maximum_stock_level}
+                                                            </td> 
                                                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                                                {new Date(product.created_at).toLocaleDateString()}
+                                                                {new Date(product.created_at).toLocaleDateString()} 
                                                             </td>
                                                             <td className="px-4 py-3">
                                                                 <button
@@ -604,7 +602,7 @@ export default function MedicalSuppliesItems() {
 
                                     {/* Unit of Measure */}
                                     <div>
-                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Unit of Measure *</label>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Base Unit of Measure *</label>
                                         <select
                                             required
                                             value={formData.smallest_base_uom_id}

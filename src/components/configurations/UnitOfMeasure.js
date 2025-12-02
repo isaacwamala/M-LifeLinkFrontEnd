@@ -151,7 +151,7 @@ function UnitOfMeasure() {
     return (
         <>
             <ToastContainer />
-            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
                 <div className="w-full bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
 
                     {/* Header */}

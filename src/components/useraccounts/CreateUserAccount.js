@@ -187,8 +187,8 @@ function CreateUserAccount() {
     return (
         <>
             <ToastContainer />
-            <div className="container mx-auto px-4 mt-5">
-                <div className="flex justify-center mt-4">
+             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden">
+               
                     <div className="w-full">
                         <div className="p-4 border-2 border-gray-200 dark:border-gray-700 border-dashed rounded-lg mt-14 dashboard">
                             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg overflow-hidden">
@@ -450,7 +450,7 @@ function CreateUserAccount() {
                         </div>
                     </div>
                 </div>
-            </div>
+            
         </>
 
     );

@@ -8,7 +8,7 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
 import axios from "axios";
 import { API_BASE_URL } from "../general/constants";
-
+import { useNavigate } from 'react-router-dom';
 
 export default function RegisterMedicalStock() {
     const [formData, setFormData] = useState({
@@ -43,7 +43,7 @@ export default function RegisterMedicalStock() {
     const [conversions, setConversions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-
+const navigate = useNavigate();
     //New state that pbserves aproduct  missing aconversion set
     const [conversionMissing, setConversionMissing] = useState(false);
 
@@ -255,7 +255,9 @@ export default function RegisterMedicalStock() {
     return (
         <>
             <ToastContainer />
-            <div className="w-full">
+             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
+
+               <div className="w-full">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                     {/* Header */}
                     <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 sm:px-8 sm:py-6">
@@ -263,7 +265,13 @@ export default function RegisterMedicalStock() {
                             <Package className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                             <h1 className="text-white text-xl sm:text-2xl">Register Your Medical Stock</h1>
                         </div>
+                        {/* Info span */}
+                        <span className="block mt-2 text-white text-sm sm:text-base">
+                             Stock will be stored in the product's base unit of measure. It is recommended to register stock using the product's smallest/base unit to ensure accurate inventory tracking.
+                        </span>
                     </div>
+
+
 
                     {/* Summary + Caution */}
                     <div className="bg-blue-50 dark:bg-gray-800 border-l-4 border-blue-600 p-6 sm:p-8 mt-6 mb-6 rounded-md mx-2 sm:mx-4">
@@ -346,14 +354,23 @@ export default function RegisterMedicalStock() {
                                         value={formData.product_id}
                                         onChange={handleProductUOMChange}
                                         required
-                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 max-h-40 overflow-y-auto"
                                     >
                                         <option value="">Select Product</option>
-                                        {products.map(product => (
-                                            <option key={product.id} value={product.id}>
-                                                {product.name}
-                                            </option>
-                                        ))}
+                                        {/* Show product option values on selection */}
+                                        {products.map((product) => {
+                                            // Combine variant options into a single text string
+                                            const variantText = product.variant_options
+                                                ? product.variant_options.map(v => `${v.option_value}`).join(" / ")
+                                                : "";
+
+                                            return (
+                                                <option key={product.id} value={product.id}>
+                                                    {product.name}
+                                                    {variantText ? ` – ${variantText}` : ""}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                             </div>
@@ -559,8 +576,8 @@ export default function RegisterMedicalStock() {
                                 type="submit"
                                 disabled={submitting || conversionMissing}
                                 className={`px-6 py-2.5 rounded-lg text-white transition-colors shadow-md hover:shadow-lg flex items-center gap-2
-        ${submitting || conversionMissing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}
-    `}
+                                ${submitting || conversionMissing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}
+                                `}
                             >
                                 {submitting ? (
                                     <>
@@ -623,7 +640,7 @@ export default function RegisterMedicalStock() {
                                         type="button"
                                         onClick={() => {
                                             setShowModal(false);
-                                            alert('Navigate to Product Unit Converter setup');
+                                             navigate('/convert_different_uoms_in_terms_of_product_base_unit');
                                         }}
                                         className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                                     >
@@ -634,7 +651,9 @@ export default function RegisterMedicalStock() {
                         </div>
                     </div>
                 )}
-            </div>
+            </div> 
+             </div>
+            
         </>
 
     );

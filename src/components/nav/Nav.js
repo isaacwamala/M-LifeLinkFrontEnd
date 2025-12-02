@@ -18,41 +18,80 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
   const menuItems = [
     { icon: Home, label: "Dashboard", active: true, link: "/dashboard" },
-    { icon: BarChart3, label: "Analytics", link: "/analytics" },
-    { icon: ArchiveRestore, label: "Suppliers", link: "/suppliers" },
-    { icon: Antenna, label: "Products Categories", link: "/categories" },
-    {
-      icon: Users,
-      label: "Users",
-      hasDropdown: true,
-      children: [
-        { label: "All Users", icon: Users, link: "/users" },
-        { label: "User Roles", icon: Shield, link: "/users/roles" },
-        { label: "Permissions", icon: FileText, link: "/users/permissions" },
-      ]
-    },
+    // { icon: BarChart3, label: "Analytics", link: "/analytics" },
+    // { icon: ArchiveRestore, label: "Suppliers", link: "/suppliers" },
+    // { icon: Antenna, label: "Products Categories", link: "/categories" },
+
     {
       icon: Settings,
       label: "Configurations",
       hasDropdown: true,
       children: [
         { label: "Unit Of Measure", icon: Settings, link: "/unit_of_measure" },
-        { label: "Security", icon: Shield, link: "/settings/security" },
-        { label: "Preferences", icon: Folder, link: "/settings/preferences" },
+        { label: "UOM converter", icon: Shield, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
       ]
     },
 
     // Ware house and supplier management
-       {
+    {
       icon: Settings,
       label: "Warehouse/Suppliers",
       hasDropdown: true,
       children: [
         { label: "Suppliers", icon: Settings, link: "/suppliers" },
-        { label: "Security", icon: Shield, link: "/settings/security" },
-        { label: "Preferences", icon: Folder, link: "/settings/preferences" },
+        { label: "WareHouses", icon: Shield, link: "/warehouses" },
       ]
     },
+
+    // Hospital items/equipements
+    {
+      icon: Settings,
+      label: "Pharmacuetical items",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "item categories", link: "/categories" },
+        { label: "medical items", icon: Settings, link: "/medical_supply_items" },
+      ]
+    },
+
+    //Purchase orders
+    {
+      icon: Settings,
+      label: "Purchase orders",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "create purchase order", link: "/create_purchase_order" },
+        { label: "purchase orders", icon: Settings, link: "/purchase_orders" },
+         { label: "Supplier order payments", icon: Settings, link: "/supplier/order_payments" },
+      ]
+    },
+
+    // Register stock
+    {
+      icon: Settings,
+      label: "Stock and Inventory",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "register stock", link: "/register_medical_stock" },
+        { label: "Manage stock", icon: Settings, link: "/medical_stock" },
+        { label: "stock adjustments", icon: Settings, link: "/stock_adjustments" },
+        { label: "Adjustment logs", icon: Settings, link: "/stock_adjustments_logs" },
+        { label: "Inventory", icon: Settings, link: "/inventory" }
+      ]
+    },
+
+    {
+      icon: Users,
+      label: "Auth & OAuth",
+      hasDropdown: true,
+      children: [
+        { label: "register user", icon: Shield, link: "/create_user_account" },
+        { label: "All Users", icon: Users, link: "/users" },
+        { label: "Assign roles", icon: Shield, link: "/assign_role_to_user" },
+        { label: "Account types", icon: FileText, link: "/usergroups" },
+      ]
+    },
+
 
 
 
@@ -88,7 +127,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
   }, [showUserModal]);
 
 
-  
+
 
   return (
     <>
@@ -151,7 +190,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
                   </a>
                   <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                   <a
-                    href="#"
+                    href="/"
                     className="flex items-center gap-3 px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
                     <LogOut className="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -182,7 +221,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
               <h1
                 className={`text-white dark:text-gray-100 text-lg font-bold transition-opacity duration-300 ${isCollapsed ? "opacity-0 w-0" : "opacity-100"}`}
               >
-                NEXTUS ENTERPRISES
+                MEDICONNECT
               </h1>
             </div>
             <button

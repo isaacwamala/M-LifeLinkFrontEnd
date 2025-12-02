@@ -152,7 +152,7 @@ function WareHouses() {
     return (
         <>
             <ToastContainer />
-            <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-indigo-800 dark:via-blue-700 dark:to-black p-8 transition-colors duration-300 dashboard">
+            <div className="min-h-screen bg-gray-50 dark:bg-gradient-to-br dark:from-indigo-800 dark:via-blue-700 dark:to-black p-8 transition-colors duration-300">
                 <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="mb-8">
                         <h1 className="text-gray-900 dark:text-white mb-2">

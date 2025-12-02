@@ -53,9 +53,6 @@ function UserGroups() {
       <ToastContainer />
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden">
-        <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-
           <div className="w-full">
 
            
@@ -173,7 +170,7 @@ function UserGroups() {
               id={id}
             />
           </div>
-        </div>
+      
       </div>
 
     </>

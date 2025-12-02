@@ -230,8 +230,8 @@ function UserAccountLists() {
     return (
         <>
             <ToastContainer />
-            <div className="container mx-auto mt-5 px-4 bg-white dark:bg-gray-900 min-h-screen">
-                <div className="flex justify-center mt-4">
+             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
+              
                     <div className="w-full">
                         <div className="p-4 border-2 border-blue-200 border-dashed rounded-lg dark:border-blue-700">
                             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
@@ -452,7 +452,7 @@ function UserAccountLists() {
                             </div>
                         </div>
                     </div>
-                </div>
+                
             </div>
 
             {/* Update User Modal - Flowbite Style */}

@@ -278,7 +278,7 @@ export default function UomConversionForProductBaseUnit() {
     return (
         <>
             <ToastContainer />
-            <div className="min-h-screen bg-white dark:bg-gray-900 p-4 md:p-8">
+                        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
                 <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     {/* Header */}
                     <div className="mb-8">
@@ -286,7 +286,7 @@ export default function UomConversionForProductBaseUnit() {
                             Global Product Unit of Measure Converter
                         </h1>
                         <p className="text-lg text-gray-600 dark:text-gray-400">
-                            Manage product unit conversions and multipliers, multiplier effect is expressed in product's base unit of measure 
+                            Manage product unit conversions and multipliers, multiplier effect is expressed in product's base unit of measure
                         </p>
                     </div>
 
@@ -545,12 +545,25 @@ export default function UomConversionForProductBaseUnit() {
                                         <select
                                             value={formData.product_name}
                                             onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-                                            className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600"
+                                            className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 max-h-40 overflow-y-auto"
                                         >
                                             <option value="">Select a product</option>
-                                            {products.map((p) => (
-                                                <option key={p.id} value={p.id}>{p.name}</option>
-                                            ))}
+                                            {/* Append variants alongside their product names */}
+                                            {products.map((p) => {
+                                                // Build variant string: "strength: 1g, packaging: Blister Pack, size: Medium"
+                                                const variantText = p.variant_options && p.variant_options.length > 0
+                                                    ? p.variant_options
+                                                        .map(v => `${v.option_name}: ${v.option_value}`)
+                                                        .join(", ")
+                                                    : "No variants";
+
+                                                return (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.name} — ({variantText})
+                                                    </option>
+                                                );
+                                            })}
+
                                         </select>
                                     </div>
                                 )}

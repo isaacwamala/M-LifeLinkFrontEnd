@@ -71,8 +71,8 @@ function AssignRoleToUser() {
     <>
       <ToastContainer />
 
-      <div className="container mx-auto mt-5 px-4">
-        <div className="flex justify-center mt-4">
+       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden">
+       
           <div className="w-full">
             <div className="p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg mt-14">
               {/* Card */}
@@ -184,7 +184,7 @@ function AssignRoleToUser() {
               </div>
             </div>
           </div>
-        </div>
+     
       </div>
     </>
 

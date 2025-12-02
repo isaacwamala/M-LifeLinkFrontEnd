@@ -171,7 +171,7 @@ function Categories() {
                 <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                            Products Category Management
+                            Medical Items Categories
                         </h1>
                         <button
                             onClick={openAddModal}
