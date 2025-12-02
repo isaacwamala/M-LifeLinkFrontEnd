@@ -419,8 +419,13 @@ const StockAdjustments = () => {
                                 </button>
                             </div>
 
+
+
                             {/* Modal Form */}
                             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                                <span className="block mt-2  text-gray-900 font-bold dark:text-white text-sm sm:text-base">
+                                    Since each product belongs to aspecific batch/Lot, Lot selection will base on selected product
+                                </span>
                                 {/* Product Selection */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
@@ -453,7 +458,7 @@ const StockAdjustments = () => {
                                 {/* Batch Selection */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Batch *
+                                        Select Batch *
                                     </label>
                                     <select
                                         value={formData.batch_id || ''}
