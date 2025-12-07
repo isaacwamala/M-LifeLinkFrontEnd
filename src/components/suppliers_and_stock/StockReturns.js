@@ -1,19 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, ChevronLeft, ChevronRight, X, TrendingUp, TrendingDown, Package } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, X, TrendingUp, TrendingDown, AlertCircle, Package } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
 import axios from "axios";
 import { API_BASE_URL } from "../general/constants";
-
+import { fetchUoms } from '../products/products_helper';
+import { useNavigate } from 'react-router-dom';
 
 
 const StockReturns = () => {
     const [returns, setReturns] = useState([]);
+    const navigate = useNavigate();
+    const [showModal, setShowModal] = useState(false);
     const [filteredReturns, setFilteredReturns] = useState([]);
     const [productWithBatches, setProductWithBatches] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [uoms, setUoms] = useState([]);
+    const [modalMessage, setModalMessage] = useState({ product: '', uom: '' });
     const [submitting, setSubmitting] = useState(false);
     const token = localStorage.getItem('access_token');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,6 +29,16 @@ const StockReturns = () => {
 
     //State to confirm warning ,to create areturn
     const [confirmedWarning, setConfirmedWarning] = useState(false);
+
+    //New state that observes aproduct  missing aconversion set
+    const [conversionMissing, setConversionMissing] = useState(false);
+    const [conversions, setConversions] = useState([]);
+
+    const [expandedRow, setExpandedRow] = useState(null);
+
+    const toggleExpand = (id) => {
+        setExpandedRow(expandedRow === id ? null : id);
+    };
 
 
     // Ensure we show data for this month of the current year, as back end returns them by default
@@ -42,9 +57,31 @@ const StockReturns = () => {
         product_id: "",
         batch_id: "",
         returned_quantity: "",
+        selected_uom_id: "",
         return_reason: "",
         return_date: new Date().toISOString().split('T')[0],
     });
+    //Fetch products with their conversions
+    const fetchProductsWithTheirUomConversions = async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}items/getProductBaseUomAndItsUomConversions`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            });
+            if (response.data.status === "success") {
+                toast.success(response.data.message);
+                const data = response.data.products;
+                setConversions(data);
+                console.log("conversions:", data);
+            }
+        } catch (error) {
+            console.error("Error returning products with their conversions:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
 
 
@@ -104,10 +141,18 @@ const StockReturns = () => {
         }
     };
 
+    //fetch uoms
+    const loadUoms = async () => {
+        const data = await fetchUoms(token);
+        setUoms(data);
+    };
+
     // Set fetched data on component mount
     useEffect(() => {
         fetchStockReturns(1); // always reset to page 1 when dates change
         fetchProductWithTheirBatches();
+        loadUoms();
+        fetchProductsWithTheirUomConversions();
     }, [dateFrom, dateTo]);
 
     // Handle resetting to default
@@ -117,17 +162,127 @@ const StockReturns = () => {
         fetchStockReturns(1); // reload default data from backend
     };
 
-    // Handle product change and batch
-    const handleProductChange = (productId) => {
-        const product = productWithBatches.find(p => p.id == productId);
 
-        setSelectedProduct(product);
+    //Check if conversion exists for the selected product and entered unit of measure
+    useEffect(() => {
+        const { product_id, selected_uom_id } = formData;
 
-        setFormData({
-            ...formData,
-            product_id: productId,
-            batch_id: ""    // reset because new product == new batches
-        });
+        // Check if any productitem is missing a conversion
+        if (!product_id || !selected_uom_id) {
+            setConversionMissing(false);
+            return;
+        }
+        //Find in conversions where product id matches like the one in formdata.product id
+        const product = conversions.find(
+            p => p.id.toString() === product_id.toString()
+        );
+
+        //If its missing, return false
+        if (!product) {
+            setConversionMissing(true);
+            return;
+        }
+
+        //Check if the uom conversion exists for the selected unit of measure
+        const hasConversion = product.uom_conversions.some(
+            u => u.uom_id.toString() === selected_uom_id.toString()
+        );
+
+        setConversionMissing(!hasConversion);
+    }, [formData, conversions]);
+
+    //Handle the product and unit of measure selected change
+    //To rule out if it really has aconversion or not
+    //If its not having the conversion, simply return null and display 
+    // amodal for the user to set it first
+
+    //We ensure that we simplify stock adjustment, if the product has unit conversions, adjustmant becomes
+    //simpler, ie we can adjust in sacks but as we convert in base units  if ie the product base uom is KG
+    const handleProductOrUOMChange = (field, value) => {
+        const updated = { ...formData, [field]: value };
+        setFormData(updated);
+
+        // If changing product, update selectedProduct + reset batch
+        if (field === "product_id") {
+            const prod = productWithBatches.find(p => p.id.toString() === value.toString());
+            setSelectedProduct(prod || null);
+
+            // Reset batch when product changes
+            setFormData(prev => ({
+                ...prev,
+                product_id: value,
+                batch_id: ""
+            }));
+        }
+
+        // Existing UOM + conversion logic below...
+        const { product_id, selected_uom_id } = updated;
+        if (!product_id || !selected_uom_id) return;
+
+        const selectedProductConv = conversions.find(
+            p => p.id.toString() === product_id.toString()
+        );
+        if (!selectedProductConv) return;
+
+        const hasConversion = selectedProductConv.uom_conversions.some(
+            u => u.uom_id.toString() === selected_uom_id.toString()
+        );
+
+        if (!hasConversion) {
+            const p = productWithBatches.find(pr => pr.id.toString() === product_id.toString());
+            const u = uoms.find(um => um.id.toString() === selected_uom_id.toString());
+
+            setModalMessage({
+                product: p?.name || "",
+                uom: u?.name || ""
+            });
+
+            setShowModal(true);
+            setConversionMissing(true);
+        } else {
+            setConversionMissing(false);
+        }
+    };
+
+    //Function to display the conversion of selected unit of measure.
+    //ie if uom strip contains 5 tablets, for aspecific product
+    //and its se;ected we show 1 strip contains 5 tablets
+    const renderUnitConversion = (item) => {
+        if (!item.product_id || !item.selected_uom_id) return null;
+
+        // Find product with conversions
+        const productConv = conversions.find(
+            p => p.id.toString() === item.product_id.toString()
+        );
+        if (!productConv) return null;
+
+        // Find UOM conversion entry for selected UOM
+        const uomConv = productConv.uom_conversions.find(
+            u => u.uom_id.toString() === item.selected_uom_id.toString()
+        );
+        if (!uomConv) return null;
+
+        // Base UOM name
+        const baseUOM = productConv.base_uom?.name || "";
+
+        // Selected UOM name
+        const uomName =
+            uoms.find(u => u.id.toString() === item.selected_uom_id.toString())?.name ||
+            "";
+
+        const multiplier = uomConv.multiplier ?? 1;
+
+        return (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                    <p className="text-blue-900 dark:text-white">
+                        <span className="font-semibold">Unit Conversion:</span>{' '}
+                        1 {uomName} = {multiplier} {baseUOM}{multiplier > 1 ? 's' : ''}
+                    </p>
+                </div>
+            </div>
+        );
     };
 
     // Handle the submit of anew adjustment
@@ -143,6 +298,10 @@ const StockReturns = () => {
         }
         if (!formData.batch_id) {
             toast.error("Please select a batch.");
+            return;
+        }
+        if (!formData.selected_uom_id) {
+            toast.error("Please select unit of measure, this helps to know how to adjust the stock for better stock inventory");
             return;
         }
         if (!formData.return_reason) {
@@ -186,7 +345,7 @@ const StockReturns = () => {
                 product_id: "",
                 batch_id: "",
                 return_reason: "",
-                returned_quantity: 1,
+                returned_quantity: "",
                 return_date: new Date().toISOString().split("T")[0],
             });
 
@@ -279,6 +438,7 @@ const StockReturns = () => {
 
 
                     {/* Table */}
+                    {/* Table */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
                         {loading ? (
                             <div className="p-6">
@@ -288,8 +448,20 @@ const StockReturns = () => {
                             <table className="w-full min-w-[700px]">
                                 <thead className="bg-gray-100 dark:bg-gray-700">
                                     <tr>
-                                        {["Date of return", "Product", "Batch", "Quantity returned", "Supplier", "Reason", "User"].map((th) => (
-                                            <th key={th} className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                        {[
+                                            "Date of return",
+                                            "Product",
+                                            "Batch",
+                                            "Quantity returned",
+                                            "Supplier",
+                                            "Reason",
+                                            "User",
+                                            "Actions"
+                                        ].map((th) => (
+                                            <th
+                                                key={th}
+                                                className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                                            >
                                                 {th}
                                             </th>
                                         ))}
@@ -297,54 +469,96 @@ const StockReturns = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                     {filteredReturns.map((adj) => (
-                                        <tr
-                                            key={adj.id}
-                                            className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
-                                        >
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
-                                                {new Date(adj.return_date).toLocaleDateString()}
-                                            </td>
+                                        <React.Fragment key={adj.id}>
+                                            {/* MAIN ROW */}
+                                            <tr className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
+                                                    {new Date(adj.return_date).toLocaleDateString()}
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                                                {/* Product Name + UOM */}
-                                                <div>
-                                                    {adj.product.name}{" "}
-                                                </div>
+                                                <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                                                    <div>{adj.product.name}</div>
+                                                    {Array.isArray(adj.product.variant_options) &&
+                                                        adj.product.variant_options.length > 0 && (
+                                                            <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                                                {adj.product.variant_options
+                                                                    .map((opt) => opt.option_value)
+                                                                    .join(" / ")}
+                                                            </div>
+                                                        )}
+                                                </td>
 
-                                                {/* Show product Variant Option Values (e.g., 100g/Black) */}
-                                                {Array.isArray(adj.product.variant_options) && adj.product.variant_options.length > 0 && (
-                                                    <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                                                        {adj.product.variant_options
-                                                            .map((opt) => opt.option_value)
-                                                            .join(" / ")
-                                                        }
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{adj.batch.batch_number}</span>
+                                                        <span className="text-xs font-bold dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                                                            Exp: {adj.batch.expiry_date}
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </td>
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">{adj.batch.batch_number}</span>
-                                                    <span className="text-xs font-bold  dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                                                        Exp: {adj.batch.expiry_date}
-                                                    </span>
-                                                </div>
-                                            </td>
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                                    {adj.returned_quantity}
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
-                                                {adj.returned_quantity}
-                                            </td>
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                                    {adj.supplier?.name}
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
-                                                {adj.supplier?.name}
-                                            </td>
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                                    {adj.return_reason}
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
-                                                {adj.return_reason}
-                                            </td>
+                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
+                                                    {adj.user.name}
+                                                </td>
 
-                                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">{adj.user.name}</td>
-                                        </tr>
+                                                <td className="px-4 sm:px-6 py-3">
+                                                    <button
+                                                        onClick={() => toggleExpand(adj.id)}
+                                                        className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded"
+                                                    >
+                                                        {expandedRow === adj.id ? "Hide" : "Details"}
+                                                    </button>
+                                                </td>
+                                            </tr>
+
+                                            {/* EXPANDED DETAILS ROW */}
+                                            {expandedRow === adj.id && (
+                                                <tr className="bg-gray-50 dark:bg-gray-900">
+                                                    <td colSpan="8" className="px-6 py-4">
+                                                        <div className="space-y-4 text-sm text-gray-900 dark:text-gray-200">
+                                                            {/* UOM Conversion */}
+                                                            {adj.uom_conversion_used && (
+                                                                <div>
+                                                                    <h4 className="font-bold mb-1">UOM Conversion Used</h4>
+                                                                    <p>
+                                                                        Selected/Entered Unit Of Measure:{" "}
+                                                                        <strong>{adj.uom_conversion_used.selected_uom.name || 'N/A'}</strong>
+                                                                    </p>
+                                                                    <p>
+                                                                        Entered Qty Of Unit Of Measure:{" "}
+                                                                        <strong>{adj.uom_conversion_used.entered_uom_quantity || 'N/A'}</strong>
+                                                                    </p>
+                                                                    <p>
+                                                                        Entered Unit Of Measure Multiplier:{" "}
+                                                                        <strong>{adj.uom_conversion_used.selected_uom.multiplier || 'N/A'}</strong>
+                                                                    </p>
+                                                                    <p className="font-bold mb-1 mt-2">
+                                                                        Final Quantity In Base Units:{" "}
+                                                                        <strong>{adj.uom_conversion_used.quantity_in_base_uom || 'N/A'}</strong>
+                                                                    </p>
+                                                                    <p>
+                                                                        Product's Base UOM Name:{" "}
+                                                                        <strong>{adj.uom_conversion_used.product_base_uom_name || 'N/A'}</strong>
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>
@@ -374,21 +588,12 @@ const StockReturns = () => {
                                     >
                                         <ChevronRight className="w-5 h-5" />
                                     </button>
-
-                                    <span className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
-                                        Page {currentPage} of {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={() => fetchStockReturns(Math.min(totalPages, currentPage + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <ChevronRight className="w-5 h-5" />
-                                    </button>
                                 </div>
                             </div>
                         )}
                     </div>
+
+
                 </div>
 
                 {/* MODAL TO ADD NEW ADJUSTMENT */}
@@ -421,7 +626,9 @@ const StockReturns = () => {
                                     </label>
                                     <select
                                         value={formData.product_id || ''}
-                                        onChange={(e) => handleProductChange(Number(e.target.value))}
+                                        onChange={(e) =>
+                                            handleProductOrUOMChange("product_id", e.target.value)
+                                        }
                                         required
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
@@ -443,10 +650,35 @@ const StockReturns = () => {
                                     </select>
                                 </div>
 
+                                {/* Show conversion information if available, for the selected product item's unit of measure */}
+                                {renderUnitConversion(formData)}
+
+                                {/* Unit of measure */}
+                                <div>
+                                    <label className="block text-gray-900 dark:text-gray-200 font-bold mb-2">
+                                        Unit of Measure To Adjust<span className="text-red-500">*</span>
+                                    </label>
+
+                                    <select
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        value={formData.selected_uom_id}
+                                        onChange={(e) => handleProductOrUOMChange("selected_uom_id", e.target.value)}
+                                        required
+                                    >
+                                        <option value="">Select UOM</option>
+                                        {uoms.map((uom) => (
+                                            <option key={uom.id} value={uom.id}>
+                                                {uom.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+
                                 {/* Batch Selection */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Select Batch *
+                                        Select Batch to make a return from*
                                     </label>
                                     <select
                                         value={formData.batch_id || ''}
@@ -469,7 +701,7 @@ const StockReturns = () => {
                                 {/* Quantity */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Quantity to be returned*
+                                        Quantity to be returned in UOM selected above*
                                     </label>
                                     <input
                                         type="number"
@@ -562,9 +794,9 @@ const StockReturns = () => {
 
                                     <button
                                         type="submit"
-                                        disabled={submitting || !confirmedWarning}
+                                        disabled={submitting || !confirmedWarning || conversionMissing || showModal}
                                         className={`px-6 py-2.5 rounded-lg text-white transition-colors shadow-md hover:shadow-lg flex items-center gap-2
-            ${(submitting || !confirmedWarning)
+            ${(submitting || !confirmedWarning || conversionMissing || showModal)
                                                 ? 'bg-gray-400 cursor-not-allowed'
                                                 : 'bg-blue-600 hover:bg-blue-700'
                                             }`}
@@ -585,9 +817,66 @@ const StockReturns = () => {
                     </div>
                 )}
 
+                {/* Modal to display UOM non existence */}
+                {showModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+                            <div className="bg-red-50 dark:bg-red-900 px-6 py-4 border-b border-red-200 dark:border-red-700 rounded-t-lg">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                        <h2 className="text-red-900 dark:text-white">Unit Conversion Not Found</h2>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowModal(false)}
+                                        className="text-red-400 dark:text-red-300 hover:text-red-600 dark:hover:text-red-500 transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+
+
+                            <div className="p-6">
+                                <p className="text-gray-700 dark:text-gray-200 mb-4">
+                                    The selected UOM <span className="font-semibold text-gray-900 dark:text-white">{modalMessage.uom}</span> was not set
+                                    for product <span className="font-semibold text-gray-900 dark:text-white">{modalMessage.product}</span> in the
+                                    Product Unit Converter.
+                                </p>
+
+                                <div className="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 mb-4">
+                                    <p className="text-yellow-800 dark:text-yellow-300 text-sm">
+                                        <strong>Action Required:</strong> Please set up the unit conversion for this product
+                                        and UOM combination in the Product Unit Converter before proceeding.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowModal(false)}
+                                        className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowModal(false);
+                                            navigate('/convert_different_uoms_in_terms_of_product_base_unit');
+                                        }}
+                                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                    >
+                                        Go to Unit Converter
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
-
 
 
         </>

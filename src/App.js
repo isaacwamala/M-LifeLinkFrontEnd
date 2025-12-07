@@ -36,7 +36,7 @@ import SupplierPaymentsOnOrders from "./components/suppliers_and_stock/SupplierP
 import RegisterPharmacySales from "./components/pharmacy_sales/RegisterPharmacySales.js";
 import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
 
-import StockReturnsNew from "./components/suppliers_and_stock/StockRetursNew.js";
+
 function App() {
   return (
     <Router>
@@ -105,7 +105,7 @@ function App() {
                 <Route path="/register_pharmacy_sales" element={<RegisterPharmacySales />} />
                 <Route path="/pharmacy_sales" element={<ViewSales />} />
 
-                <Route path="/stock_returns_new" element={<StockReturnsNew />} />
+          
 
                 
 
