@@ -263,7 +263,8 @@ export default function MedicalStock() {
                 discounted_selling_price: editFormData.discounted_selling_price,
                 batch_number: editFormData.batch_number,
                 purchased_date: editFormData.purchased_date,
-                expiry_date: editFormData.expiry_date
+                expiry_date: editFormData.expiry_date,
+                manufacturer: editFormData.manufacturer,
             };
 
             console.log("Submitting payload:", payload);
@@ -394,6 +395,7 @@ export default function MedicalStock() {
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Entered UOM QTY</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Actual QTY(BaseUnits)</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Expiry date</th>
+                                        <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Manufacturer</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">
                                             Adjusted?
                                         </th>
@@ -445,6 +447,8 @@ export default function MedicalStock() {
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
                                                 {new Date(stock.expiry_date).toLocaleDateString()}
                                             </td>
+
+                                            <td className="px-6 py-4 text-red-700 font-bold dark:text-white">{stock.manufacturer}</td>
 
                                             <td className="px-6 py-4">
                                                 {Number(stock.is_stock_adjusted) === 1 ? (
@@ -899,6 +903,18 @@ export default function MedicalStock() {
                                         value={editFormData.batch_number}
                                         onChange={(e) =>
                                             setEditFormData({ ...editFormData, batch_number: e.target.value })
+                                        }
+                                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
+                                    />
+                                </div>
+                                {/* Manufacturer */}
+                                <div>
+                                    <label className="block text-gray-700 dark:text-gray-300 mb-2">Manufacturer</label>
+                                    <input
+                                        type="text"
+                                        value={editFormData.manufacturer}
+                                        onChange={(e) =>
+                                            setEditFormData({ ...editFormData, manufacturer: e.target.value })
                                         }
                                         className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
                                     />

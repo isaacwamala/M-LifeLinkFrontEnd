@@ -30,7 +30,13 @@ import StockAdjustmentsLogs from "./components/products/StockAdjustmentLogs.js";
 import MainInventoryTrack from "./components/products/MainInventoryTrack.js";
 
 import SupplierPurchaseOrderPayments from "./components/suppliers_and_stock/SupplierPurchaseOrderPayments.js";
+import StockReturns from "./components/suppliers_and_stock/StockReturns.js";
+import SupplierPaymentsOnOrders from "./components/suppliers_and_stock/SupplierPaymentsOnOrders.js";
 
+import RegisterPharmacySales from "./components/pharmacy_sales/RegisterPharmacySales.js";
+import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
+
+import StockReturnsNew from "./components/suppliers_and_stock/StockRetursNew.js";
 function App() {
   return (
     <Router>
@@ -65,7 +71,7 @@ function App() {
                 {/* Suppliers and stock */}
                 <Route path="/suppliers" element={<Suppliers />} />
                 <Route path="/warehouses" element={<WareHouses />} />
-                
+
 
                 {/* Configurations */}
                 <Route path="/unit_of_measure" element={<UnitOfMeasure />} />
@@ -79,19 +85,29 @@ function App() {
 
                 {/* Product batches */}
                 <Route path="/register_medical_stock" element={<RegisterMedicalStock />} />
-                <Route path="/medical_stock" element={<MedicalStock/>}/>
+                <Route path="/medical_stock" element={<MedicalStock />} />
 
                 {/* Purchase orders */}
                 <Route path="/purchase_orders" element={<PurchaseOrders />} />
-                <Route path="/create_purchase_order" element={<CreatePurchaseOrder/>}/>
-                <Route path="/supplier/order_payments" element={<SupplierPurchaseOrderPayments/>}/>
+                <Route path="/create_purchase_order" element={<CreatePurchaseOrder />} />
+                <Route path="/supplier/order_payments" element={<SupplierPurchaseOrderPayments />} />
+                <Route path="/supplier/order_payments/analysis" element={<SupplierPaymentsOnOrders />} />
 
                 {/* Stock Adjustments */}
-                <Route path="/stock_adjustments" element={<StockAdjustments/>}/>
-                 <Route path="/stock_adjustments_logs" element={<StockAdjustmentsLogs/>}/>
+                <Route path="/stock_adjustments" element={<StockAdjustments />} />
+                <Route path="/stock_adjustments_logs" element={<StockAdjustmentsLogs />} />
+                <Route path="/stock_returns" element={<StockReturns />} />
 
-                 {/* Main inventory */}
-                 <Route path="/inventory" element={<MainInventoryTrack/>}/>
+                {/* Main inventory */}
+                <Route path="/inventory" element={<MainInventoryTrack />} />
+
+                {/* Pharmacy sales */}
+                <Route path="/register_pharmacy_sales" element={<RegisterPharmacySales />} />
+                <Route path="/pharmacy_sales" element={<ViewSales />} />
+
+                <Route path="/stock_returns_new" element={<StockReturnsNew />} />
+
+                
 
               </Routes>
 

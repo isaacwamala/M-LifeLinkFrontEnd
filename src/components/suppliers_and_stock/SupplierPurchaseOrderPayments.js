@@ -182,19 +182,17 @@ export default function SupplierPurchaseOrderPayments() {
                 }
             );
 
-            if (response.data.success) {
-            
-                setIsModalOpen(false);
-                setFormData({
-                    order_id: "",
-                    amount_paid: "",
-                    payment_date: new Date().toISOString().split("T")[0],
-                    payment_method: "cash",
-                    remarks: ""
-                });
-                fetchSupplierOrderPayments(); // refresh payments list
-                toast.success(response.data.message || "Failed to create payment");
-            } 
+            setIsModalOpen(false);
+            setFormData({
+                order_id: "",
+                amount_paid: "",
+                payment_date: new Date().toISOString().split("T")[0],
+                payment_method: "cash",
+                remarks: ""
+            });
+            fetchSupplierOrderPayments(); // refresh payments list
+            toast.success(response.data.message || "Failed to create payment");
+
         } catch (error) {
             console.error("Error creating supplier payment:", error);
             toast.error(error.response?.data.message);
@@ -204,9 +202,17 @@ export default function SupplierPurchaseOrderPayments() {
     };
 
 
+    //Handle input change and ensure amount_paid is converted to int
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        // Convert to float if it's the amount_paid field
+        const parsedValue = name === "amount_paid" ? parseInt(value) : value;
+
+
+        setFormData((prev) => ({
+            ...prev,
+            [name]: parsedValue
+        }));
     };
 
     return <>

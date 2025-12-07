@@ -181,7 +181,8 @@ export default function CreatePurchaseOrder() {
         };
 
         console.log("SUBMITTING:", payload); // For debugging
-        setIsSubmitting(false);
+        setIsSubmitting(true);   
+
         try {
 
             const response = await axios.post(`${API_BASE_URL}purchase/createPurchaseOrder`, payload, {
