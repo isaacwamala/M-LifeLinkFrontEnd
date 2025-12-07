@@ -9,25 +9,25 @@ import { fetchUoms } from '../products/products_helper';
 import { useNavigate } from 'react-router-dom';
 
 
-
-const StockAdjustments = () => {
-    const [adjustments, setAdjustments] = useState([]);
-    const [filteredAdjustments, setFilteredAdjustments] = useState([]);
-    const [modalMessage, setModalMessage] = useState({ product: '', uom: '' });
+const StockReturnsNew = () => {
+    const [returns, setReturns] = useState([]);
+    const navigate = useNavigate();
+    const [showModal, setShowModal] = useState(false);
+    const [filteredReturns, setFilteredReturns] = useState([]);
     const [productWithBatches, setProductWithBatches] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
-    const [showModal, setShowModal] = useState(false);
-    const navigate = useNavigate();
     const [totalPages, setTotalPages] = useState(1);
+    const [uoms, setUoms] = useState([]);
+    const [modalMessage, setModalMessage] = useState({ product: '', uom: '' });
     const [submitting, setSubmitting] = useState(false);
     const token = localStorage.getItem('access_token');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [uoms, setUoms] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const now = new Date();
 
-    //State to confirm warning ,to create an adjustment
+    //State to confirm warning ,to create areturn
     const [confirmedWarning, setConfirmedWarning] = useState(false);
 
     //New state that observes aproduct  missing aconversion set
@@ -56,77 +56,11 @@ const StockAdjustments = () => {
     const [formData, setFormData] = useState({
         product_id: "",
         batch_id: "",
-        adjustment_type: "",
-        selected_uom_id: "",        //3-strip, 4-tablet
-        quantity_to_adjust_per_uom: "",  // Quantity in the selected UOM
-        reason_for_adjustment: "",
-        date_of_adjustment: new Date().toISOString().split('T')[0],
+        returned_quantity: "",
+        selected_uom_id: "",
+        return_reason: "",
+        return_date: new Date().toISOString().split('T')[0],
     });
-
-    //fetch uoms
-    const loadUoms = async () => {
-        const data = await fetchUoms(token);
-        setUoms(data);
-    };
-
-
-    //Return all stock adjustments, it returns all, for current year and current month
-    const fetchStockAdjustments = async (page = 1) => {
-        try {
-            setLoading(true);
-
-            const response = await axios.get(`${API_BASE_URL}items/getStockAdjustments`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-                params: {
-                    from_date: dateFrom,
-                    to_date: dateTo,
-                    page: page
-                }
-            });
-
-            const data = response.data.data;
-
-            setAdjustments(data.data);
-            setFilteredAdjustments(data.data); // optional: still keep filtered copy if needed
-            setTotalPages(data.last_page);
-            setCurrentPage(data.current_page);
-
-        } catch (error) {
-            console.error("Error fetching stock adjustments", error);
-            toast.error("Failed to fetch adjustments");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    //Fetch products with their batches
-    const fetchProductWithTheirBatches = async () => {
-        try {
-            setLoading(true);
-
-            const response = await axios.get(`${API_BASE_URL}items/getProductsWithTheirBatches`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-
-            });
-
-            const data = response.data.products;
-            setProductWithBatches(data);
-            console.log('data', data);
-
-        } catch (error) {
-            console.error("Error fetching product with batches", error);
-            toast.error("Failed to fetch products with batches");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     //Fetch products with their conversions
     const fetchProductsWithTheirUomConversions = async () => {
         try {
@@ -149,37 +83,86 @@ const StockAdjustments = () => {
         }
     };
 
+
+
+    //Return stock returns for current year and current month
+    const fetchStockReturns = async (page = 1) => {
+        try {
+            setLoading(true);
+
+            const response = await axios.get(`${API_BASE_URL}items/getStockReturns`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+                params: {
+                    from_date: dateFrom,
+                    to_date: dateTo,
+                    page: page
+                }
+            });
+
+            const data = response.data.data;
+
+            setReturns(data.data);
+            setFilteredReturns(data.data); // optional: still keep filtered copy if needed
+            setTotalPages(data.last_page);
+            setCurrentPage(data.current_page);
+
+        } catch (error) {
+            console.error("Error fetching stock returns", error);
+            toast.error("Failed to fetch returns");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    //Fetch products with their batches
+    const fetchProductWithTheirBatches = async () => {
+        try {
+            setLoading(true);
+
+            const response = await axios.get(`${API_BASE_URL}items/getProductsWithTheirBatches`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+
+            });
+
+            const data = response.data.products;
+            setProductWithBatches(data);
+
+        } catch (error) {
+            console.error("Error fetching product with batches", error);
+            toast.error("Failed to fetch products with batches");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    //fetch uoms
+    const loadUoms = async () => {
+        const data = await fetchUoms(token);
+        setUoms(data);
+    };
+
     // Set fetched data on component mount
     useEffect(() => {
-        fetchStockAdjustments(1); // always reset to page 1 when dates change
+        fetchStockReturns(1); // always reset to page 1 when dates change
         fetchProductWithTheirBatches();
         loadUoms();
         fetchProductsWithTheirUomConversions();
     }, [dateFrom, dateTo]);
 
-
     // Handle resetting to default
     const handleResetFilters = () => {
         setDateFrom(startOfMonth);
         setDateTo(endOfMonth);
-        fetchStockAdjustments(1); // reload default data from backend
+        fetchStockReturns(1); // reload default data from backend
     };
 
-    // Handle product change and batch
-    const handleProductChange = (productId) => {
-        const product = productWithBatches.find(p => p.id == productId);
-
-        setSelectedProduct(product);
-
-        setFormData({
-            ...formData,
-            product_id: productId,
-            batch_id: ""    // reset because new product == new batches
-        });
-    };
-
-
-
+    
     //Check if conversion exists for the selected product and entered unit of measure
     useEffect(() => {
         const { product_id, selected_uom_id } = formData;
@@ -302,7 +285,6 @@ const StockAdjustments = () => {
         );
     };
 
-
     // Handle the submit of anew adjustment
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -322,21 +304,17 @@ const StockAdjustments = () => {
             toast.error("Please select unit of measure, this helps to know how to adjust the stock for better stock inventory");
             return;
         }
+        if (!formData.return_reason) {
+            toast.error("Please choose reason.");
+            return;
+        }
+        if (!formData.returned_quantity) {
+            toast.error("Returned quantity must be greater than zero.");
+            return;
+        }
 
-        if (!formData.adjustment_type) {
-            toast.error("Please choose adjustment type.");
-            return;
-        }
-        if (!formData.quantity_to_adjust_per_uom || formData.quantity_to_adjust_per_uom <= 0) {
-            toast.error("Enter quantity of uom and must be greater than zero.");
-            return;
-        }
-        if (!formData.reason_for_adjustment.trim()) {
-            toast.error("Please enter a reason for adjustment.");
-            return;
-        }
-        if (!formData.date_of_adjustment) {
-            toast.error("Please select the date of adjustment.");
+        if (!formData.return_date) {
+            toast.error("Please select the return date.");
             return;
         }
 
@@ -345,7 +323,7 @@ const StockAdjustments = () => {
 
         try {
             const response = await axios.post(
-                `${API_BASE_URL}items/createStockAdjustment`,
+                `${API_BASE_URL}items/createStockReturn`,
                 formData,
                 {
                     headers: {
@@ -358,7 +336,7 @@ const StockAdjustments = () => {
             toast.success(response.data.message);
 
             // Refresh
-            fetchStockAdjustments(1);
+            fetchStockReturns(1);
 
             setIsModalOpen(false);
 
@@ -366,19 +344,16 @@ const StockAdjustments = () => {
             setFormData({
                 product_id: "",
                 batch_id: "",
-                adjustment_type: "increase",
-                // quantity_base: 1,
-                selected_uom_id: "",
-                quantity_to_adjust_per_uom: "",
-                reason_for_adjustment: "",
-                date_of_adjustment: new Date().toISOString().split("T")[0],
+                return_reason: "",
+                returned_quantity: "",
+                return_date: new Date().toISOString().split("T")[0],
             });
 
             setSelectedProduct(null);
 
         } catch (error) {
             console.error(error);
-            toast.error("Failed to submit stock adjustment");
+            toast.error("Failed to submit stock return");
         } finally {
             setSubmitting(false);
         }
@@ -399,14 +374,14 @@ const StockAdjustments = () => {
                             </div>
 
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                                Stock Adjustments
+                                Stock Returns To Suppliers
                             </h1>
                         </div>
 
                         <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-base leading-relaxed">
-                            The adjustments displayed below reflect <b>the current month of the current year</b>.
-                            You may adjust the filters to search for adjustments based on the
-                            <b> date of adjustment</b>.
+                            The stock returns displayed below reflect <b>the current month of the current year</b>.
+                            You may adjust the filters to search for returns based on the
+                            <b> return date</b>.
                         </p>
                     </div>
 
@@ -453,7 +428,7 @@ const StockAdjustments = () => {
                                     className="flex w-full sm:w-auto justify-center items-center gap-2 px-5 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-400 transition-colors font-medium shadow-md"
                                 >
                                     <Plus className="w-5 h-5" />
-                                    Add Adjustment
+                                    Add stock return
                                 </button>
                             </div>
 
@@ -463,204 +438,162 @@ const StockAdjustments = () => {
 
 
                     {/* Table */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-                        {loading ? (
-                            <div className="p-6">
-                                <Skeleton count={8} height={30} className="mb-3" />
-                            </div>
-                        ) : (
-                            <table className="w-full min-w-[900px]">
-                                <thead className="bg-gray-100 dark:bg-gray-700">
-                                    <tr>
-                                        {[
-                                            "Date of Adjustment",
-                                            "Product",
-                                            "Batch",
-                                            "Type",
-                                            "Quantity",
-                                            "Before → After",
-                                            "Reason",
-                                            "User",
-                                            "Actions"
-                                        ].map((th) => (
-                                            <th
-                                                key={th}
-                                                className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white"
-                                            >
-                                                {th}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
+                    {/* Table */}
+<div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
+    {loading ? (
+        <div className="p-6">
+            <Skeleton count={8} height={30} className="mb-3" />
+        </div>
+    ) : (
+        <table className="w-full min-w-[700px]">
+            <thead className="bg-gray-100 dark:bg-gray-700">
+                <tr>
+                    {[
+                        "Date of return",
+                        "Product",
+                        "Batch",
+                        "Quantity returned",
+                        "Supplier",
+                        "Reason",
+                        "User",
+                        "Actions"
+                    ].map((th) => (
+                        <th
+                            key={th}
+                            className="px-4 sm:px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white"
+                        >
+                            {th}
+                        </th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredReturns.map((adj) => (
+                    <React.Fragment key={adj.id}>
+                        {/* MAIN ROW */}
+                        <tr className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
+                                {new Date(adj.return_date).toLocaleDateString()}
+                            </td>
 
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {filteredAdjustments.map((adj) => (
-                                        <React.Fragment key={adj.id}>
-                                            {/* MAIN ROW */}
-                                            <tr className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                                                {/* DATE */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white whitespace-nowrap">
-                                                    {new Date(adj.date_of_adjustment).toLocaleDateString()}
-                                                </td>
+                            <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                                <div>{adj.product.name}</div>
+                                {Array.isArray(adj.product.variant_options) &&
+                                    adj.product.variant_options.length > 0 && (
+                                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                            {adj.product.variant_options
+                                                .map((opt) => opt.option_value)
+                                                .join(" / ")}
+                                        </div>
+                                    )}
+                            </td>
 
-                                                {/* PRODUCT */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                                                    <div>{adj.product.name}</div>
-
-                                                    {Array.isArray(adj.product.variant_options) &&
-                                                        adj.product.variant_options.length > 0 && (
-                                                            <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                                                                {adj.product.variant_options
-                                                                    .map((opt) => opt.option_value)
-                                                                    .join(" / ")}
-                                                            </div>
-                                                        )}
-                                                </td>
-
-                                                {/* BATCH */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{adj.batch.batch_number}</span>
-                                                        <span className="text-xs font-bold dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                                                            Exp: {adj.batch.expiry_date}
-                                                        </span>
-                                                    </div>
-                                                </td>
-
-                                                {/* TYPE */}
-                                                <td className="px-4 sm:px-6 py-3">
-                                                    {adj.adjustment_type === "increase" ? (
-                                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400">
-                                                            <TrendingUp className="w-3 h-3" /> Increase
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">
-                                                            <TrendingDown className="w-3 h-3" /> Decrease
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                {/* QUANTITY */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm font-bold text-gray-900 dark:text-white">
-                                                    {adj.adjustment_type === "increase" ? "+" : "-"}
-                                                    {adj.quantity_base}
-                                                </td>
-
-                                                {/* BEFORE → AFTER */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
-                                                    <span className="text-gray-500 dark:text-gray-300">
-                                                        {adj.quantity_track.quantity_before}
-                                                    </span>
-                                                    <span className="mx-2">→</span>
-                                                    <span className="font-semibold">
-                                                        {adj.quantity_track.quantity_after}
-                                                    </span>
-                                                </td>
-
-                                                {/* REASON */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
-                                                    {adj.reason_for_adjustment}
-                                                </td>
-
-                                                {/* USER */}
-                                                <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
-                                                    {adj.user.name}
-                                                </td>
-
-                                                {/* ACTIONS */}
-                                                <td className="px-4 sm:px-6 py-3">
-                                                    <button
-                                                        onClick={() => toggleExpand(adj.id)}
-                                                        className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded"
-                                                    >
-                                                        {expandedRow === adj.id ? "Hide" : "Details"}
-                                                    </button>
-                                                </td>
-                                            </tr>
-
-                                            {/* EXPANDED DETAILS ROW */}
-                                            {expandedRow === adj.id && (
-                                                <tr className="bg-gray-50 dark:bg-gray-900">
-                                                    <td colSpan="9" className="px-6 py-4">
-                                                        <div className="space-y-4 text-sm text-gray-900 dark:text-gray-200">
-                                                            {/* UOM CONVERSION */}
-                                                            <div>
-                                                                <h4 className="font-bold mb-1">UOM Conversion Used</h4>
-                                                                <p>
-                                                                    Selected/Entered Unit Of Measure:{" "}
-                                                                    <strong>{adj.uom_conversion_used.selected_uom.name || 'N/A'}</strong>
-                                                                </p>
-                                                                <p>
-                                                                    Entered Qty Of Unit Of Measure:{" "}
-                                                                    <strong>{adj.uom_conversion_used.entered_uom_quantity || 'N/A'}</strong>
-                                                                </p>
-                                                                <p>
-                                                                    Entered Unit Of Measure Multiplier:{" "}
-                                                                    <strong>{adj.uom_conversion_used.selected_uom.multiplier || 'N/A'}</strong>
-                                                                </p>
-
-                                                                <p className="font-bold mb-1 mt-2">
-                                                                    Final Quantity In Base Units:{" "}
-                                                                    <strong>{adj.uom_conversion_used.quantity_in_base_uom || 'N/A'}</strong>
-                                                                </p>
-                                                                <p>
-                                                                    Product's Base UOM Name:{" "}
-                                                                    <strong>{adj.uom_conversion_used.product_base_uom_name || 'N/A'}</strong>
-                                                                </p>
-                                                            </div>
-
-                                                            {/* QUANTITY TRACK */}
-                                                            <div>
-                                                                <h4 className="font-bold mb-1">Quantity Tracking</h4>
-                                                                <p>
-                                                                    Before:{" "}
-                                                                    <strong>{adj.quantity_track.quantity_before || 'N/A'}</strong> →
-                                                                    After:{" "}
-                                                                    <strong>{adj.quantity_track.quantity_after || 'N/A'}</strong>
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-
-                        {/* PAGINATION */}
-                        {!loading && (
-                            <div className="px-4 sm:px-6 py-3 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-                                <div className="text-sm text-gray-500 dark:text-gray-300">
-                                    Showing {filteredAdjustments.length} of {adjustments.length} adjustments
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => fetchStockAdjustments(Math.max(1, currentPage - 1))}
-                                        disabled={currentPage === 1}
-                                        className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <ChevronLeft className="w-5 h-5" />
-                                    </button>
-
-                                    <span className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
-                                        Page {currentPage} of {totalPages}
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{adj.batch.batch_number}</span>
+                                    <span className="text-xs font-bold dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                                        Exp: {adj.batch.expiry_date}
                                     </span>
-
-                                    <button
-                                        onClick={() => fetchStockAdjustments(Math.min(totalPages, currentPage + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <ChevronRight className="w-5 h-5" />
-                                    </button>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            </td>
 
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                {adj.returned_quantity}
+                            </td>
+
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                {adj.supplier?.name}
+                            </td>
+
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-300 max-w-[150px] truncate">
+                                {adj.return_reason}
+                            </td>
+
+                            <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
+                                {adj.user.name}
+                            </td>
+
+                            <td className="px-4 sm:px-6 py-3">
+                                <button
+                                    onClick={() => toggleExpand(adj.id)}
+                                    className="px-3 py-1 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded"
+                                >
+                                    {expandedRow === adj.id ? "Hide" : "Details"}
+                                </button>
+                            </td>
+                        </tr>
+
+                        {/* EXPANDED DETAILS ROW */}
+                        {expandedRow === adj.id && (
+                            <tr className="bg-gray-50 dark:bg-gray-900">
+                                <td colSpan="8" className="px-6 py-4">
+                                    <div className="space-y-4 text-sm text-gray-900 dark:text-gray-200">
+                                        {/* UOM Conversion */}
+                                        {adj.uom_conversion_used && (
+                                            <div>
+                                                <h4 className="font-bold mb-1">UOM Conversion Used</h4>
+                                                <p>
+                                                    Selected/Entered Unit Of Measure:{" "}
+                                                    <strong>{adj.uom_conversion_used.selected_uom.name || 'N/A'}</strong>
+                                                </p>
+                                                <p>
+                                                    Entered Qty Of Unit Of Measure:{" "}
+                                                    <strong>{adj.uom_conversion_used.entered_uom_quantity || 'N/A'}</strong>
+                                                </p>
+                                                <p>
+                                                    Entered Unit Of Measure Multiplier:{" "}
+                                                    <strong>{adj.uom_conversion_used.selected_uom.multiplier || 'N/A'}</strong>
+                                                </p>
+                                                <p className="font-bold mb-1 mt-2">
+                                                    Final Quantity In Base Units:{" "}
+                                                    <strong>{adj.uom_conversion_used.quantity_in_base_uom || 'N/A'}</strong>
+                                                </p>
+                                                <p>
+                                                    Product's Base UOM Name:{" "}
+                                                    <strong>{adj.uom_conversion_used.product_base_uom_name || 'N/A'}</strong>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+                    </React.Fragment>
+                ))}
+            </tbody>
+        </table>
+    )}
+
+    {/* Pagination */}
+    {!loading && (
+        <div className="px-4 sm:px-6 py-3 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
+            <div className="text-sm text-gray-500 dark:text-gray-300">
+                Showing {filteredReturns.length} of {returns.length} returns
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => fetchStockReturns(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="px-4 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                    Page {currentPage} of {totalPages}
+                </span>
+                <button
+                    onClick={() => fetchStockReturns(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    )}
+</div>
+
+                    
                 </div>
 
                 {/* MODAL TO ADD NEW ADJUSTMENT */}
@@ -670,7 +603,7 @@ const StockAdjustments = () => {
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                             {/* Modal Header */}
                             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Add Stock Adjustment</h2>
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Register Stock Return</h2>
                                 <button
                                     onClick={() => setIsModalOpen(false)}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -697,25 +630,24 @@ const StockAdjustments = () => {
                                             handleProductOrUOMChange("product_id", e.target.value)
                                         }
                                         required
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg 
-               focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-               bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
                                         <option value="">Select a product</option>
-
+                                        {/* Show product option values on selection */}
                                         {productWithBatches.map((product) => {
+                                            // Combine variant options into a single text string
                                             const variantText = product.variant_options
                                                 ? product.variant_options.map(v => `${v.option_value}`).join(" / ")
                                                 : "";
 
                                             return (
                                                 <option key={product.id} value={product.id}>
-                                                    {product.name} {variantText ? `– ${variantText}` : ""}
+                                                    {product.name}
+                                                    {variantText ? ` – ${variantText}` : ""}
                                                 </option>
                                             );
                                         })}
                                     </select>
-
                                 </div>
 
                                 {/* Show conversion information if available, for the selected product item's unit of measure */}
@@ -723,20 +655,17 @@ const StockAdjustments = () => {
 
                                 {/* Unit of measure */}
                                 <div>
-                                    <label className="block text-black-700 font-bold dark:text-gray-300 mb-2">
+                                    <label className="block text-gray-900 dark:text-gray-200 font-bold mb-2">
                                         Unit of Measure To Adjust<span className="text-red-500">*</span>
                                     </label>
 
                                     <select
-                                        className="text-black dark:text-white border rounded px-3 py-2 w-full"
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         value={formData.selected_uom_id}
-                                        onChange={(e) =>
-                                            handleProductOrUOMChange("selected_uom_id", e.target.value)
-                                        }
+                                        onChange={(e) => handleProductOrUOMChange("selected_uom_id", e.target.value)}
                                         required
                                     >
                                         <option value="">Select UOM</option>
-
                                         {uoms.map((uom) => (
                                             <option key={uom.id} value={uom.id}>
                                                 {uom.name}
@@ -746,12 +675,10 @@ const StockAdjustments = () => {
                                 </div>
 
 
-
-
                                 {/* Batch Selection */}
                                 <div>
-                                    <label className="block text-sm font-medium font-bold text-gray-900 dark:text-white mb-2">
-                                        Select Batch to adjust from *
+                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                        Select Batch to make a return from*
                                     </label>
                                     <select
                                         value={formData.batch_id || ''}
@@ -769,61 +696,32 @@ const StockAdjustments = () => {
                                     </select>
                                 </div>
 
+
+
                                 {/* Quantity */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Quantity To Adjust/UOM selected
+                                        Quantity to be returned in UOM selected above*
                                     </label>
                                     <input
                                         type="number"
                                         min="1"
-                                        value={formData.quantity_to_adjust_per_uom}
-                                        onChange={(e) => setFormData({ ...formData, quantity_to_adjust_per_uom: Number(e.target.value) })}
+                                        value={formData.returned_quantity}
+                                        onChange={(e) => setFormData({ ...formData, returned_quantity: Number(e.target.value) })}
                                         required
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
                                 </div>
 
-
-                                {/* Adjustment Type */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Adjustment Type *
-                                    </label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                value="increase"
-                                                checked={formData.adjustment_type === 'increase'}
-                                                onChange={(e) => setFormData({ ...formData, adjustment_type: e.target.value })}
-                                                className="w-4 h-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
-                                            />
-                                            <span className="text-gray-900 dark:text-white">Increase</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                value="decrease"
-                                                checked={formData.adjustment_type === 'decrease'}
-                                                onChange={(e) => setFormData({ ...formData, adjustment_type: e.target.value })}
-                                                className="w-4 h-4 text-red-600 dark:text-red-400 focus:ring-red-500"
-                                            />
-                                            <span className="text-gray-900 dark:text-white">Decrease</span>
-                                        </label>
-                                    </div>
-                                </div>
-
-
                                 {/* Date */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Date of Adjustment *
+                                        Date of return *
                                     </label>
                                     <input
                                         type="date"
-                                        value={formData.date_of_adjustment}
-                                        onChange={(e) => setFormData({ ...formData, date_of_adjustment: e.target.value })}
+                                        value={formData.return_date}
+                                        onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
                                         required
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
@@ -832,19 +730,32 @@ const StockAdjustments = () => {
                                 {/* Reason */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                        Reason for Adjustment *
+                                        Reason for return *
                                     </label>
-                                    <textarea
-                                        value={formData.reason_for_adjustment}
-                                        onChange={(e) => setFormData({ ...formData, reason_for_adjustment: e.target.value })}
+
+                                    <select
+                                        value={formData.return_reason}
+                                        onChange={(e) => setFormData({ ...formData, return_reason: e.target.value })}
                                         required
-                                        rows={3}
-                                        placeholder="Enter reason for adjustment..."
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                                    />
+                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg 
+                                        focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+                                         bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                        <option value="" disabled>Select return reason</option>
+
+                                        <option value="Expired Stock">Expired Stock</option>
+                                        <option value="Near Expiry">Near Expiry</option>
+                                        <option value="Wrong Item Supplied">Wrong Item Supplied</option>
+                                        <option value="Wrong Batch Supplied">Wrong Batch Supplied</option>
+                                        <option value="Quality Issues / Defective Product">Quality Issues / Defective Product</option>
+                                        <option value="Packaging Damage">Packaging Damage</option>
+                                        <option value="Supplier Recall">Supplier Recall</option>
+                                        <option value="Overstock (Excess Supply)">Overstock (Excess Supply)</option>
+                                        <option value="Price Discrepancy / Wrong Invoice">Price Discrepancy / Wrong Invoice</option>
+                                    </select>
                                 </div>
 
-                                {/* Alert the user , there are no more updates once adjustments are done */}
+                                {/* Warning Section */}
                                 <div className="w-full px-4 py-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 
     text-yellow-800 dark:text-yellow-200 border border-yellow-300 dark:border-yellow-700 
     text-sm font-semibold flex flex-col gap-3">
@@ -869,7 +780,6 @@ const StockAdjustments = () => {
                                     </button>
                                 </div>
 
-
                                 {/* Submit Buttons */}
                                 <div className="flex gap-3 pt-4">
                                     <button
@@ -886,7 +796,7 @@ const StockAdjustments = () => {
                                         type="submit"
                                         disabled={submitting || !confirmedWarning || conversionMissing || showModal}
                                         className={`px-6 py-2.5 rounded-lg text-white transition-colors shadow-md hover:shadow-lg flex items-center gap-2
-                                        ${(submitting || !confirmedWarning || conversionMissing || showModal)
+            ${(submitting || !confirmedWarning || conversionMissing || showModal)
                                                 ? 'bg-gray-400 cursor-not-allowed'
                                                 : 'bg-blue-600 hover:bg-blue-700'
                                             }`}
@@ -897,10 +807,11 @@ const StockAdjustments = () => {
                                                 Submitting...
                                             </>
                                         ) : (
-                                            "Create Adjustment"
+                                            "Create Return"
                                         )}
                                     </button>
                                 </div>
+
                             </form>
                         </div>
                     </div>
@@ -968,9 +879,8 @@ const StockAdjustments = () => {
             </div>
 
 
-
         </>
     );
 };
 
-export default StockAdjustments;
+export default StockReturnsNew;

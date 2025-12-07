@@ -62,23 +62,27 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       children: [
         { icon: Antenna, label: "create purchase order", link: "/create_purchase_order" },
         { label: "purchase orders", icon: Settings, link: "/purchase_orders" },
-         { label: "Supplier order payments", icon: Settings, link: "/supplier/order_payments" },
+        { label: "Manage supplier payments", icon: Settings, link: "/supplier/order_payments" },
+        { label: "Track supplier order payments", icon: Settings, link: "/supplier/order_payments/analysis" },
       ]
     },
 
     // Register stock
     {
       icon: Settings,
-      label: "Stock and Inventory",
+      label: "Stock Management",
       hasDropdown: true,
       children: [
         { icon: Antenna, label: "register stock", link: "/register_medical_stock" },
         { label: "Manage stock", icon: Settings, link: "/medical_stock" },
         { label: "stock adjustments", icon: Settings, link: "/stock_adjustments" },
         { label: "Adjustment logs", icon: Settings, link: "/stock_adjustments_logs" },
-        { label: "Inventory", icon: Settings, link: "/inventory" }
+        { label: "Stock returns", icon: Settings, link: "/stock_returns" },
       ]
     },
+    
+    // Inventory
+    { icon: Antenna, label: "Inventory", link: "/inventory" },
 
     {
       icon: Users,
@@ -92,7 +96,17 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       ]
     },
 
-
+// Sales
+   // Register stock
+    {
+      icon: Settings,
+      label: "Pharmacy sales",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "register sale", link: "/register_pharmacy_sales" },
+        { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
+      ]
+    },
 
 
 

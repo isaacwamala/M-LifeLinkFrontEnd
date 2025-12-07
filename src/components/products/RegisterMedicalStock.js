@@ -19,6 +19,7 @@ export default function RegisterMedicalStock() {
         batch_number: '',
         purchase_date: '',
         expiry_date: '',
+        manufacturer: '',
         supplier_price: '',
         discounted_selling_price: '',
     });
@@ -215,6 +216,7 @@ const navigate = useNavigate();
                     batch_number: formData.batch_number,
                     purchased_date: formData.purchase_date,
                     expiry_date: formData.expiry_date,
+                    manufacturer: formData.manufacturer,
                     supplier_id: formData.supplier_id
                 },
                 {
@@ -235,6 +237,7 @@ const navigate = useNavigate();
                     batch_number: '',
                     purchase_date: '',
                     expiry_date: '',
+                    manufacturer: '',
                     supplier_price: '',
                     discounted_selling_price: '',
                 });
@@ -528,6 +531,27 @@ const navigate = useNavigate();
                                 </div>
                             </div>
 
+                            {/* Manufacturer */}
+                                  <div className="space-y-2">
+                                <label htmlFor="manufacturer" className="block text-gray-700 dark:text-gray-200">
+                                   Manufacturer <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-300" />
+                                    <input
+                                        type="text"
+                                        id="manufacturer"
+                                        name="manufacturer"
+                                        value={formData.manufacturer}
+                                        onChange={handleChange}
+                                        required
+                
+                                        placeholder="Enter manufaturer name"
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                </div>
+                            </div>
+
                             {/* Selling Price */}
                             <div className="space-y-2">
                                 <label htmlFor="sellingPrice" className="block text-gray-700 dark:text-gray-200">
@@ -563,6 +587,7 @@ const navigate = useNavigate();
                                         batch_number: '',
                                         purchase_date: '',
                                         expiry_date: '',
+                                        manufacturer: '',
                                         quantity_for_uom_entered: '',
                                         supplier_price: '',
                                         discounted_selling_price: '',
