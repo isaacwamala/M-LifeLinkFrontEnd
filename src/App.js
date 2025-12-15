@@ -37,6 +37,10 @@ import RegisterPharmacySales from "./components/pharmacy_sales/RegisterPharmacyS
 import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
 
 
+import { Patients } from "./components/patients/Patients.js";
+import { PatientVisits } from "./components/patients/PatientVisits.js";
+
+
 function App() {
   return (
     <Router>
@@ -105,9 +109,11 @@ function App() {
                 <Route path="/register_pharmacy_sales" element={<RegisterPharmacySales />} />
                 <Route path="/pharmacy_sales" element={<ViewSales />} />
 
-          
+                {/* Patients */}
+                <Route path="/patients" element={<Patients />} />
 
-                
+                {/* Patient Visits */}
+                <Route path="/patient_visits" element={<PatientVisits />} />
 
               </Routes>
 

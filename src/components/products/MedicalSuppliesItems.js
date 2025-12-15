@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, Edit2, X, Package, TrendingUp, AlertCircle, Calendar } from 'lucide-react';
+import { Search, Plus, Edit2, X, Package, TrendingUp, AlertCircle, Calendar,} from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
 import axios from "axios";
+import { API_BASE_URL } from '../general/constants';
 
 //import uoms,categories,variants,and medical items(products)
 import { fetchUoms } from './products_helper';
@@ -167,6 +168,7 @@ export default function MedicalSuppliesItems() {
                 })) || [],
             });
         } else {
+            //Else reset form for new product
             setEditingProduct(null);
             setFormData({
                 name: '',
@@ -237,8 +239,8 @@ export default function MedicalSuppliesItems() {
         console.log("Submitting payload:", payload);
 
         const url = editingProduct
-            ? "http://127.0.0.1:8000/api/items/updateProductItem"
-            : "http://127.0.0.1:8000/api/items/registerProductItem";
+            ? `${API_BASE_URL}items/updateProductItem`
+            : `${API_BASE_URL}items/registerProductItem`;
 
         try {
             const response = await axios.post(url, payload, {
