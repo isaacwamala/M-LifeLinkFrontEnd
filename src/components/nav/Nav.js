@@ -80,7 +80,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Stock returns", icon: Settings, link: "/stock_returns" },
       ]
     },
-    
+
     // Inventory
     { icon: Antenna, label: "Inventory", link: "/inventory" },
 
@@ -96,8 +96,8 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       ]
     },
 
-// Sales
-   // Register stock
+    // Sales
+    // Register stock
     {
       icon: Settings,
       label: "Pharmacy sales",
@@ -107,6 +107,38 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
       ]
     },
+
+    //Lab configs
+    {
+      icon: Settings,
+      label: "Laboratory",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "Manage lab sections", link: "/lab_sections" },
+        { label: "Lab instruments", icon: Settings, link: "/instruments" },
+        { label: "Specimens", icon: Settings, link: "/specimens" },
+        { label: "Lab Test types", icon: Settings, link: "/test_types" },
+        { label: "Specimens to test types", icon: Settings, link: "/manage_specimen/and_their_test_types" },
+
+      ]
+      
+    },
+
+        //Lab configs
+    {
+      icon: Settings,
+      label: "Patients",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "Manage patients", link: "/patients" },
+        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
+        { label: "Patient Lab Tests ", icon: Settings, link: "/patient_lab/test/requests" },
+    
+      ]
+      
+    },
+
+    
 
 
 

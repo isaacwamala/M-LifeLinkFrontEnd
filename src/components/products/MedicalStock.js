@@ -135,18 +135,23 @@ export default function MedicalStock() {
 
     //const filteredOrders
     const filteredStockItems = useMemo(() => {
+        const term = searchTerm.toLowerCase();
+
         return stockItems.filter(stock => {
             const matchesSearch =
-                stock.batch_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                stock.product.name.toLowerCase().includes(searchTerm.toLowerCase())
+                stock.batch_number.toLowerCase().includes(term) ||
+                stock.product.name.toLowerCase().includes(term);
 
+            // Convert created_at to YYYY-MM-DD string (local)
+            const createdDateStr = new Date(stock.created_at).toLocaleDateString('en-CA');
 
-            const matchesDateFrom = !dateFrom || new Date(stock.created_at) >= new Date(dateFrom);
-            const matchesDateTo = !dateTo || new Date(stock.created_at) <= new Date(dateTo);
+            const matchesDateFrom = !dateFrom || createdDateStr >= dateFrom;
+            const matchesDateTo = !dateTo || createdDateStr <= dateTo;
 
             return matchesSearch && matchesDateFrom && matchesDateTo;
         });
     }, [stockItems, searchTerm, dateFrom, dateTo]);
+
 
 
     const handleViewBatch = (stock) => {

@@ -140,14 +140,16 @@ export function Patients() {
                 p.phone_number?.toLowerCase().includes(term) ||
                 p.branch_name?.toLowerCase().includes(term);
 
-            const created = new Date(p.created_at);
+            // Convert created_at to local YYYY-MM-DD
+            const createdDateStr = new Date(p.created_at).toLocaleDateString('en-CA'); // YYYY-MM-DD
 
-            const matchesDateFrom = !dateFrom || created >= new Date(dateFrom);
-            const matchesDateTo = !dateTo || created <= new Date(dateTo);
+            const matchesDateFrom = !dateFrom || createdDateStr >= dateFrom;
+            const matchesDateTo = !dateTo || createdDateStr <= dateTo;
 
             return matchesSearch && matchesDateFrom && matchesDateTo;
         });
     }, [patients, searchTerm, dateFrom, dateTo]);
+
 
     // Toggle row
     const toggleRow = (saleNumber) => {
@@ -319,7 +321,7 @@ export function Patients() {
                         <div className="flex items-center gap-3">
                             <HandCoins className="w-8 h-8 text-blue-600" />
                             <h1 className="text-black-900 font-bold dark:text-white text-2xl md:text-[30px]">
-                                Manage Patients
+                                Manage Registered Patients
                             </h1>
                         </div>
                         <p className="text-gray-600 dark:text-gray-300 text-sm md:text-base">

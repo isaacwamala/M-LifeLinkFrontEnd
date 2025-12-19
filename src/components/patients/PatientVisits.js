@@ -8,10 +8,13 @@ import { fetchPatientCategories } from './patients_helper';
 import { fetchDoctors } from './patients_helper';
 import { toast, ToastContainer } from 'react-toastify';
 import { fetchBasicPatientsInfoForDropDowns } from './patients_helper';
+import { useNavigate } from "react-router-dom";
+
 
 
 
 export function PatientVisits() {
+    const navigate = useNavigate();
     const [visits, setPatientVisits] = useState([]);
     const [paients, setPatients] = useState([]);
     const [expandedRows, setExpandedRows] = useState(new Set());
@@ -21,16 +24,11 @@ export function PatientVisits() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingVisit, setEditingVisit] = useState(null);
     const [submitting, setSubmitting] = useState(false);
-    const [patientCategories, setPatientCategories] = useState([]);
     const [doctors, setDoctors] = useState([]);
 
-    const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
-    const [visitSubmitting, setVisitSubmitting] = useState(false);
-    const [selectedVisit, setSelectedVisit] = useState(null);
 
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [showAddPatient, setShowAddPatient] = useState(false);
-
 
 
     //Set current page due to paginations from back end
@@ -149,10 +147,11 @@ export function PatientVisits() {
                 v.visit_created_by?.name.toLowerCase().includes(term);
 
 
-            const created = new Date(v.created_at);
+            const visitDate = new Date(v.visit_date);
+            
 
-            const matchesDateFrom = !dateFrom || created >= new Date(dateFrom);
-            const matchesDateTo = !dateTo || created <= new Date(dateTo);
+            const matchesDateFrom = !dateFrom || visitDate >= new Date(dateFrom);
+            const matchesDateTo = !dateTo || visitDate <= new Date(dateTo);
 
             return matchesSearch && matchesDateFrom && matchesDateTo;
         });
@@ -179,36 +178,36 @@ export function PatientVisits() {
     };
 
     //Open modal with existing data during update
-   const openModal = (visit = null, patientId = null) => {
-    if (visit) {
-        // EDIT MODE
-        setEditingVisit(visit);
+    const openModal = (visit = null, patientId = null) => {
+        if (visit) {
+            // EDIT MODE
+            setEditingVisit(visit);
 
-        setFormData({
-            visit_id: visit.id,             
-            patient_id: visit.patient_id,
-            visit_type: visit.visit_type ?? '',
-            status: visit.status ?? '',
-            visit_reason: visit.visit_reason ?? '',
-            visit_date: visit.visit_date ?? '',
-            visit_start_time: visit.visit_start_time ?? '',
-            visit_end_time: visit.visit_end_time ?? '',
-            assigned_doctor_id: visit.assigned_doctor_id ?? '',
-        });
-    } else {
-        // CREATE MODE to create new vist
-        setEditingVisit(null);
+            setFormData({
+                visit_id: visit.id,
+                patient_id: visit.patient_id,
+                visit_type: visit.visit_type ?? '',
+                status: visit.status ?? '',
+                visit_reason: visit.visit_reason ?? '',
+                visit_date: visit.visit_date ?? '',
+                visit_start_time: visit.visit_start_time ?? '',
+                visit_end_time: visit.visit_end_time ?? '',
+                assigned_doctor_id: visit.assigned_doctor_id ?? '',
+            });
+        } else {
+            // CREATE MODE to create new vist
+            setEditingVisit(null);
 
-        setFormData({
-            ...initialFormData,
-            patient_id: patientId ?? '',
-            status: 'waiting',
-            visit_date: new Date().toISOString().split('T')[0],
-        });
-    }
+            setFormData({
+                ...initialFormData,
+                patient_id: patientId ?? '',
+                status: 'waiting',
+                visit_date: new Date().toISOString().split('T')[0],
+            });
+        }
 
-    setIsModalOpen(true);
-};
+        setIsModalOpen(true);
+    };
 
 
 
@@ -457,6 +456,22 @@ export function PatientVisits() {
                                                     <Edit2 className="w-5 h-5" />
                                                 </button>
 
+                                                {/* Button to create lab test */}
+                                                <button
+                                                    onClick={() =>
+                                                        navigate(`/visits/${visit.id}/lab-tests/create`, {
+                                                            state: {
+                                                                visit,
+                                                            },
+                                                        })
+                                                    }
+                                                    className="ml-2 flex items-center gap-1 text-green-600 hover:text-green-500"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Lab Test
+                                                </button>
+
+
 
                                             </td>
                                         </tr>
@@ -494,6 +509,15 @@ export function PatientVisits() {
                                                             <p className="text-sm text-gray-600 dark:text-gray-300">
                                                                 {visit.visit_reason ?? "N/A"}
                                                             </p>
+
+                                                              <h4 className="text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                                                <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                                Patient Info
+                                                            </h4>
+                                                             <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                                {visit.patient.phone_number ?? "N/A"}
+                                                            </p>
+
 
                                                         </div>
 

@@ -6,62 +6,63 @@ import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
-//import categories from the helper
-import { fetchProductCategories } from "./products_helper";
+import { fetchLabInstruments } from "../patients/patients_lab_tests_helper";
 
 
-function Categories() {
+export function LabInstruments() {
 
     const token = localStorage.getItem('access_token');
     const [loading, setLoading] = useState(true);
-    const [categories, setCategories] = useState([]); //initialize state 
+    const [labInstruments, setLabInstruments] = useState([]); //initialize state 
 
-    //Use product categories from the products helper
+    //Use lab instruments from the helper
+    const loadLabInstruments= async () => {
+        setLoading(true);
+        const data = await fetchLabInstruments(token);
+        setLabInstruments(data);
+        setLoading(false);
+    };
     useEffect(() => {
-        const loadCategories = async () => {
-            setLoading(true);
-            const data = await fetchProductCategories(token);
-            setCategories(data);
-            setLoading(false);
-        };
-
-        loadCategories();
+        loadLabInstruments();
     }, [token]);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState("add");
-    const [currentCategory, setCurrentCategory] = useState(null);
+    const [currentInstrument, setCurrentInstrument] = useState(null);
 
     const [formData, setFormData] = useState({
-        name: "",
+        instrument_name: "",
+        description: ""
     });
     const [isAdding, setIsAdding] = useState(false);
 
     // Pagination setup
     const [currentPage, setCurrentPage] = useState(1);
-    // Number of suppliers per page
-    const categoriesPerPage = 6;
 
-    // Filter suppliers based on search query, 
-    const filteredCategories = categories.filter((category) => {
+    // Number of lab instruments per page
+    const labInstrumentsPerPage = 6;
+
+    // Filter lab instruments based on search query, 
+    const filteredLabInstruments = labInstruments.filter((instrument) => {
         const query = searchQuery.toLowerCase();
         return (
-            category.name.toLowerCase().includes(query)
+            instrument.instrument_name.toLowerCase().includes(query) ||
+            instrument.description.toLowerCase().includes(query)
         );
     });
 
 
     // Pagination calculations, based on filtered suppliers
-    const indexOfLastCategory = currentPage * categoriesPerPage;
-    const indexOfFirstCategory = indexOfLastCategory - categoriesPerPage;
-    const currentCategories = filteredCategories.slice(
+    const indexOfLastCategory = currentPage * labInstrumentsPerPage;
+    const indexOfFirstCategory = indexOfLastCategory - labInstrumentsPerPage;
+    const currentLabInstruments = filteredLabInstruments.slice(
         indexOfFirstCategory,
         indexOfLastCategory
     );
 
     //Compute total pages for pagination
-    const totalPages = Math.ceil(filteredCategories.length / categoriesPerPage);
+    const totalPages = Math.ceil(filteredLabInstruments.length / labInstrumentsPerPage);
 
     const nextPage = () =>
         setCurrentPage((prev) => (prev < totalPages ? prev + 1 : prev));
@@ -71,16 +72,19 @@ function Categories() {
     const openAddModal = () => {
         setModalMode("add");
         setFormData({
-            name: "",
+            instrument_name: "",
+            description: ""
         });
+
         setIsModalOpen(true);
     };
 
-    const openEditModal = (category) => {
+    const openEditModal = (instrument) => {
         setModalMode("edit");
-        setCurrentCategory(category);
+        setCurrentInstrument(instrument);
         setFormData({
-            name: category.name,
+            instrument_name: instrument.instrument_name,
+            description: instrument.description || "",
         });
         setIsModalOpen(true);
     };
@@ -88,14 +92,13 @@ function Categories() {
 
     const closeModal = () => {
         setIsModalOpen(false);
-        setCurrentCategory(null);
+        setCurrentInstrument(null);
     };
 
 
-
     const handleDelete = (id) => {
-        if (window.confirm("Are you sure you want to delete this category?")) {
-            setCategories(categories.filter((category) => category.id !== id));
+        if (window.confirm("Are you sure you want to delete this instrument?")) {
+            setLabInstruments(labInstruments.filter((instrument) => instrument.id !== id));
         }
     };
 
@@ -106,58 +109,61 @@ function Categories() {
         });
     };
 
-
-    // Handle adding and editing suppliers since adding and editing use the same modal
-    const handleAddAndEditSubmitCategories = async (e) => {
+    //Handle the addition of lab instruments
+    const handleAddAndEditSubmitLabInstruments = async (e) => {
         e.preventDefault();
 
         const safeTrim = (value) => (value || "").trim();
 
         // Validation
-        if (!safeTrim(formData.name)) {
-            toast.error("Category name is required.");
+        if (!safeTrim(formData.instrument_name)) {
+            toast.error("Lab instrument name is required.");
             return;
         }
 
 
         try {
-            setIsAdding(true); // ✅ start spinner immediately
+            setIsAdding(true);
 
             if (modalMode === "add") {
                 await axios.post(
-                    `${API_BASE_URL}config/createCategory`,
+                    `${API_BASE_URL}config/addInstrument`,
                     {
-                        name: formData.name,
+                        instrument_name: formData.instrument_name,
+                        description: formData.description,
                     },
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-                toast.success("Product category added successfully");
-            } else if (modalMode === "edit" && currentCategory) {
+                toast.success("Instrument added successfully");
+
+            } else if (modalMode === "edit" && currentInstrument) {
                 await axios.post(
-                    `${API_BASE_URL}config/updateCategory`,
+                    `${API_BASE_URL}config/updateInstrument`,
                     {
-                        id: currentCategory.id,
-                        name: formData.name,
+                        id: currentInstrument.id,
+                        instrument_name: formData.instrument_name,
+                        description: formData.description,
                     },
 
                     { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
                 );
-                toast.success("Category updated successfully");
+                toast.success("Lab instrument updated successfully");
             }
 
-            fetchProductCategories();
+            loadLabInstruments();
 
             // Reset form
             setFormData({
-                name: "",
+                instrument_name: "",
+                description: ""
 
             });
             closeModal();
         } catch (error) {
-            toast.error(error.response?.data?.error || "Failed to save category");
-            console.error("Error saving category:", error);
+            toast.error(error.response?.data?.message || "Failed to add Lab instrument.");
+            console.error("Error saving section:", error);
         } finally {
-            setIsAdding(false); // ✅ stop spinner
+            setIsAdding(false);
         }
     };
 
@@ -171,30 +177,30 @@ function Categories() {
                 <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                            Medical Items Categories
+                           Laboratory Instruments
                         </h1>
                         <button
                             onClick={openAddModal}
                             className="px-5 py-2.5 text-white font-bold rounded bg-gradient-to-r from-blue-700 to-purple-900 transition-colors duration-200 w-full md:w-auto"
                         >
-                            + Add Category
+                            + Add instrument
                         </button>
                     </div>
 
 
                     <input
                         type="text"
-                        placeholder="Search category by name..."
+                        placeholder="Search instrument by name..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full mb-6 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
 
-                    {/* Categories Grid */}
+                    {/* lab sections grid */}
                     <SkeletonTheme baseColor="#e5e7eb" highlightColor="#f3f4f6" borderRadius="0.75rem">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                             {loading ? (
-                                // 🦴 Skeleton placeholders while fetching suppliers
+                                // 🦴 Skeleton placeholders while fetching lab sections
                                 Array.from({ length: 6 }).map((_, i) => (
                                     <div
                                         key={i}
@@ -214,20 +220,24 @@ function Categories() {
                                     </div>
                                 ))
                             ) : (
-                                // 🧱 Real suppliers data
-                                currentCategories.map((category) => (
+                                // Current lab instruments
+                                currentLabInstruments.map((instrument) => (
                                     <div
-                                        key={category.id}
+                                        key={instrument.id}
                                         className="p-5 bg-gray-50 dark:bg-gray-700 rounded-lg shadow border border-gray-200 dark:border-gray-600"
                                     >
+                                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                            {instrument.instrument_name}
+                                        </h3>
+
                                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                            {category.name}
+                                            {instrument.description || 'No description'}
                                         </h3>
 
 
                                         <div className="flex gap-3 mt-4">
                                             <button
-                                                onClick={() => openEditModal(category)}
+                                                onClick={() => openEditModal(instrument)}
                                                 className="flex-1 px-4 py-2 text-white font-bold rounded-lg bg-gradient-to-r from-blue-700 to-purple-900 transition-colors duration-300"
                                             >
                                                 Edit
@@ -292,7 +302,7 @@ function Categories() {
                                 <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                                         <h3 className="text-gray-900 dark:text-white text-lg font-semibold">
-                                            {modalMode === "add" ? "Add Category" : "Edit Category"}
+                                            {modalMode === "add" ? "Add Lab Section" : "Edit Lab Section"}
                                         </h3>
                                         <button
                                             onClick={closeModal}
@@ -303,30 +313,24 @@ function Categories() {
                                     </div>
 
                                     {/* on submit,call the function that handles both editing and adding of a supplier */}
-                                    <form onSubmit={handleAddAndEditSubmitCategories} className="p-4 space-y-4">
-                                        {["name"].map(
-                                            (field) => (
-                                                <div key={field}>
-                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 capitalize">
-                                                        {field.replace(/([A-Z])/g, " $1")}
-                                                    </label>
-                                                    <input
-                                                        type={
-                                                            field === "email"
-                                                                ? "email"
-                                                                : field === "phone"
-                                                                    ? "tel"
-                                                                    : "text"
-                                                        }
-                                                        name={field}
-                                                        value={formData[field]}
-                                                        onChange={handleInputChange}
-                                                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        required={field === "name"}
-                                                    />
-                                                </div>
-                                            )
-                                        )}
+                                    <form onSubmit={handleAddAndEditSubmitLabInstruments} className="p-4 space-y-4">
+                                        {["instrument_name", "description"].map((field) => (
+                                            <div key={field}>
+                                                <label className="block text-gray-700 dark:text-gray-300 mb-1 capitalize">
+                                                    {field.replace(/_/g, " ")}
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    name={field}
+                                                    value={formData[field]}
+                                                    onChange={handleInputChange}
+                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    required={field === "lab_section_name"}
+                                                />
+                                            </div>
+                                        ))}
+
 
                                         <div className="flex justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                                             <button
@@ -366,7 +370,7 @@ function Categories() {
                                                         </svg>
                                                         Saving...
                                                     </>
-                                                ) : modalMode === "add" ? "Add Category" : "Save Changes"}
+                                                ) : modalMode === "add" ? "Add Lab Section" : "Save Changes"}
                                             </button>
 
                                         </div>
@@ -381,4 +385,4 @@ function Categories() {
         </>
 
     );
-} export default Categories
+}

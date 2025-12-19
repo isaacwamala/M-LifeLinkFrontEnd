@@ -40,6 +40,18 @@ import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
 import { Patients } from "./components/patients/Patients.js";
 import { PatientVisits } from "./components/patients/PatientVisits.js";
 
+import { LabSections } from "./components/lab/LabSections.js";
+import { LabInstruments } from "./components/lab/LabInstruments.js";
+import { SpecimenTypes } from "./components/lab/SpecimenTypes.js";
+
+// Test types
+import { TestTypes } from "./components/lab/TestTypes.js";
+import ManageSpecimenAndTheirTestTypes from "./components/lab/ManageSpecimenAndTheirTestTypes.js";
+
+// Lab requests
+import { CreateLabTestRequest } from "./components/lab_tests/CreateLabTestRequest.js";
+import { PatientLabTestRequests } from "./components/patients/PatientLabTestRequests.js";
+
 
 function App() {
   return (
@@ -114,6 +126,20 @@ function App() {
 
                 {/* Patient Visits */}
                 <Route path="/patient_visits" element={<PatientVisits />} />
+
+                {/* Lab Sections */}
+                <Route path="/lab_sections" element={<LabSections />} />
+
+                <Route path="/instruments" element={<LabInstruments />} />
+                <Route path="/specimens" element={<SpecimenTypes />} />
+                <Route path="/test_types" element={<TestTypes />} />
+
+                {/* Manage specimens with their specific Test types */}
+                <Route path="/manage_specimen/and_their_test_types" element={<ManageSpecimenAndTheirTestTypes />} />
+
+                {/* Create Lab Test Requests */}
+                <Route path="/visits/:visitId/lab-tests/create" element={<CreateLabTestRequest />} />
+                <Route path="/patient_lab/test/requests" element={<PatientLabTestRequests />} />
 
               </Routes>
 
