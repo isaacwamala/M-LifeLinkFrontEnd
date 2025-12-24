@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../general/constants';
 import { ToastContainer, toast } from 'react-toastify';
 import axios from 'axios';
 import { useNavigate } from "react-router-dom";
+import mediconnect from "../assets/mediconnect.png"
 
 function Login() {
     const dispatch = useDispatch();
@@ -84,7 +85,8 @@ function Login() {
                 {/* Background Image with Overlay */}
                 <div className="absolute inset-0 z-0">
                     <img
-                        src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1920&q=80"
+                        //src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1920&q=80"
+                        src={mediconnect}
                         alt="Medical Background"
                         className="w-full h-full object-cover"
                     />

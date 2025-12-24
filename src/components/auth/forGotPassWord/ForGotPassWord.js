@@ -4,6 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../general/constants";
+import mediconnect from "../../assets/mediconnect.png"
 
 const ForGotPassword = () => {
     const [email, setEmail] = useState('');
@@ -35,8 +36,9 @@ const ForGotPassword = () => {
             <div className="relative min-h-screen">
                 <div className="absolute inset-0 z-0">
                     <img
-                        src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1920&q=80"
-                        alt="Medical Background"
+                       // src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1920&q=80"
+                       src={mediconnect}
+                       alt="Medical Background"
                         className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-900/90 via-blue-800/85 to-teal-800/90"></div>
