@@ -111,7 +111,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
     //Lab configs
     {
       icon: Settings,
-      label: "Laboratory",
+      label: "Lab Configurations",
       hasDropdown: true,
       children: [
         { icon: Antenna, label: "Manage lab sections", link: "/lab_sections" },
@@ -119,12 +119,13 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Specimens", icon: Settings, link: "/specimens" },
         { label: "Lab Test types", icon: Settings, link: "/test_types" },
         { label: "Specimens to test types", icon: Settings, link: "/manage_specimen/and_their_test_types" },
+        { label: "Configure Test types result parameters", icon: Settings, link: "/manage/test_types_result/parameter_measure/setup" },
 
       ]
-      
+
     },
 
-        //Lab configs
+    //Lab configs
     {
       icon: Settings,
       label: "Patients",
@@ -133,12 +134,25 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { icon: Antenna, label: "Manage patients", link: "/patients" },
         { label: "Patient visits", icon: Settings, link: "/patient_visits" },
         { label: "Patient Lab Tests ", icon: Settings, link: "/patient_lab/test/requests" },
-    
+
       ]
-      
+
     },
 
-    
+    //LAB REPORTS
+    {
+      icon: Settings,
+      label: "Patient Reports",
+      hasDropdown: true,
+      children: [
+        { icon: Antenna, label: "Tests and Results", link: "/patient_test_and_results" },
+
+
+      ]
+
+    },
+
+
 
 
 

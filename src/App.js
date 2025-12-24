@@ -51,6 +51,13 @@ import ManageSpecimenAndTheirTestTypes from "./components/lab/ManageSpecimenAndT
 // Lab requests
 import { CreateLabTestRequest } from "./components/lab_tests/CreateLabTestRequest.js";
 import { PatientLabTestRequests } from "./components/patients/PatientLabTestRequests.js";
+import ManageTestTypeResultManager from "./components/lab/ManageTestTypeResultManager.js";
+
+//reporting
+import { PatientTestAndResultReports } from "./components/patients/PatientTestAndResultReports.js";
+
+
+
 
 
 function App() {
@@ -140,6 +147,14 @@ function App() {
                 {/* Create Lab Test Requests */}
                 <Route path="/visits/:visitId/lab-tests/create" element={<CreateLabTestRequest />} />
                 <Route path="/patient_lab/test/requests" element={<PatientLabTestRequests />} />
+
+                {/* Set up test types result parameters */}
+                <Route path="/manage/test_types_result/parameter_measure/setup" element={<ManageTestTypeResultManager />} />
+
+                {/* Patient Reporting */}
+                <Route path="/patient_test_and_results" element={<PatientTestAndResultReports />} />
+
+           
 
               </Routes>
 
