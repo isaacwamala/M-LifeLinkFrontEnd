@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Search, Calendar, Trash2, Filter, RefreshCw, Ha
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
+import dayjs from 'dayjs';
 import { fetchTestTypes } from './patients_lab_tests_helper';
 import { fetchSpecimenTypes } from './patients_lab_tests_helper';
 import { toast, ToastContainer } from 'react-toastify';
@@ -56,6 +57,7 @@ export function PatientLabTestRequests() {
 
     // State for active tab
     const [activeTab, setActiveTab] = useState(4); // Default to PENDING
+    const [totalConfiguredParameters, setTotalConfiguredParameters] = useState(0);
 
 
     useEffect(() => {
@@ -74,7 +76,7 @@ export function PatientLabTestRequests() {
         setLoading(false);
     };
 
-    //Load instruments
+    //Load Lab instruments
     const loadInstruments = async () => {
         setLoading(true);
         const data = await fetchLabInstruments(token);
@@ -117,8 +119,46 @@ export function PatientLabTestRequests() {
         }
     };
 
-    //Fetch All set /configured test type result parameters,
-    //These parameters will be loaded when user clicks enterresults on the modal
+    //Helper to get the right patient's reference range, based on his/her gender and age of the patient and the reference ranges defined for the test parameter in the back end
+    //This ensures that we get the right reference range for the patient's age and gender 
+    // on the result parameters set in the back end for the test type parameter and the patient's demographics
+    const getMatchingReferenceRange = (param, patient) => {
+        if (!param.reference_ranges || param.reference_ranges.length === 0) {
+            return null;
+        }
+
+        //ensure that u return null if patient's DOB is null
+        if (!patient || !patient.dob) return null;
+
+        //Calculate actual age by subtracting the current date from the patient's date of birth
+        //Using day js
+        const patientAge = dayjs().diff(dayjs(patient.dob), 'year');
+        //console.log('DOB:', patient.dob);
+        //console.log('Computed Age:', patientAge);
+        //console.log('All Ranges:', param.reference_ranges);
+
+        //Also look for the patient's gender
+        const patientGender = patient?.gender?.toLowerCase();
+        //console.log('gender', patientGender);
+
+        return param.reference_ranges.find(range => {
+            const genderMatch =
+                range.gender === 'both' ||
+                range.gender?.toLowerCase() === patientGender;
+
+            const ageMatch =
+                (!range.age_min || patientAge >= range.age_min) &&
+                (!range.age_max || patientAge <= range.age_max);
+
+            return genderMatch && ageMatch;
+        }) || null;
+    };
+
+    //Fetch All set or configured test type result parameters 
+    // for the selected test type and also filter them based on the patient's 
+    // demographics(age and gender) to get right reference range for the patient for the test type parameter
+    //By calling the helper getMatchingReferenceRange function
+    //These parameters will be loaded when user clicks enter results on the modal
     const fetchParameters = async (testTypeId) => {
         setLoading(true);
         try {
@@ -141,15 +181,41 @@ export function PatientLabTestRequests() {
             //Return test type parameters for the test type selected
             const testTypeParameters = response.data.test_type_parameters;
 
+            //Extract info from the response
+            const parsedData = testTypeParameters
+                .map(param => {
+                    //Get the matching reference ranges and right parameters for the patient based on the patient's demographics and the reference ranges set for the parameter in the back end
+                    const matchedRange = getMatchingReferenceRange(param, activeTest?.patient);
 
-            const parsedData = testTypeParameters.map(param => ({
-                ...param,
-                normal_min: param.normal_min ? parseFloat(param.normal_min) : null,
-                normal_max: param.normal_max ? parseFloat(param.normal_max) : null
-            }));
+                    // ❗ If no matching range → exclude parameter
+                    // where the patient gender and age dont fall in the ranges set age range or gender
+                    //for the parameter,this means the user has to set the range on the result parameter which satsifies
+                    //patient gender and age
+                    if (!matchedRange) return null;
 
-            //Set these parameters in state
+                    return {
+                        ...param,
+                        normal_min: matchedRange.normal_min
+                            ? parseFloat(matchedRange.normal_min)
+                            : null,
+                        normal_max: matchedRange.normal_max
+                            ? parseFloat(matchedRange.normal_max)
+                            : null,
+                        reference_range: matchedRange.reference_range,
+                        flag_low_label: matchedRange.flag_low_label || 'Low',
+                        flag_normal_label: matchedRange.flag_normal_label || 'Normal',
+                        flag_high_label: matchedRange.flag_high_label || 'High',
+                    };
+                })
+                .filter(Boolean); // removes nulls
+
+            //Set these parameters which reflect in state
             setParameters(parsedData);
+            //to check if there is any parameter before filter above occurs, for 
+            //user responses,whether configurations are missing
+            //this checks whether, the test type has no test parameters at all
+            //to prevent confusion if they have been filtered out due to patient's age and gender
+            setTotalConfiguredParameters(testTypeParameters.length);
 
         } catch (error) {
             console.error('Error fetching parameters:', error);
@@ -157,7 +223,6 @@ export function PatientLabTestRequests() {
             setLoading(false);
         }
     };
-
 
 
     //Fetch Patient Lab tests  from backend
@@ -192,7 +257,6 @@ export function PatientLabTestRequests() {
             setLoading(false);
         }
     };
-
 
 
     //Mount the component
@@ -252,8 +316,6 @@ export function PatientLabTestRequests() {
         setExpandedRows(newExpanded);
     };
 
-
-
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -261,7 +323,6 @@ export function PatientLabTestRequests() {
             day: 'numeric'
         });
     };
-
 
     // 1.Function to collect sample for a given test by id
     const handleCollectSample = async (testId) => {
@@ -456,19 +517,27 @@ export function PatientLabTestRequests() {
         }
     };
 
+    // Fetch parameters for this test type
+    //Pas the id of the test type ie HIV,CBC and then display modal with the parameters
+    //returned by the function(fetchParameters)
+    useEffect(() => {
+        if (activeTest) {
+            fetchParameters(activeTest.test_info.id);
+            setShowEnterResultsModal(true);
+        }
+    }, [activeTest]);
+
     // Handler for Enter Results button click
-    //We also fetch the parameters for the test type, 
+    // We also fetch the result parameters for the test type, 
+    // when the add results button, is clicked,it calls this function 
+    // while passing the entire active test
     const handleEnterResultsClick = async (test) => {
         setActiveTest(test);
+        // console.log('Clicked test object:', test);
+        // console.log('Clicked test.patient:', test.patient);
         setExcludedParameterIds(new Set());
         setResultValues({});
         setSelectedInstrumentId(null);
-
-        // Fetch parameters for this test type
-        //Pas the id of the tes type ie HIV,CBC and then display modal with the parameters
-        //returned by the function(fetchParameters)
-        await fetchParameters(test.test_info.id);
-        setShowEnterResultsModal(true);
     };
 
     // Handler for result value changes
@@ -498,14 +567,15 @@ export function PatientLabTestRequests() {
         });
     };
 
-    // Function to determine interpretation based on value and normal range
+    // Function to determine interpretation  of the result whether low,high or normal
+    //  based on the result value entered and the reference range for the patient for that parameter
     const getInterpretation = (value, param) => {
         if (!value || param.result_type !== 'numeric') return '';
 
         const numValue = parseFloat(value);
         if (isNaN(numValue)) return '';
 
-        if (param.normal_min && param.normal_max) {
+        if (param.normal_min !== null && param.normal_max !== null) {
             if (numValue < param.normal_min) return param.flag_low_label || 'Low';
             if (numValue > param.normal_max) return param.flag_high_label || 'High';
             return param.flag_normal_label || 'Normal';
@@ -897,8 +967,8 @@ export function PatientLabTestRequests() {
                                                 {test.visit_details?.visit_date}
                                             </td>
 
-                                            <td className="px-4 py-3 font-semibold text-gray-900 dark:text-gray-100">
-                                                {test.test_info?.test_type}
+                                            <td className="px-4 py-3 font-semibold text-red-500 dark:text-red-100">
+                                                <strong>{test.test_info?.test_type}</strong>
                                             </td>
 
                                             <td className="px-4 py-3">
@@ -1109,17 +1179,25 @@ export function PatientLabTestRequests() {
                                                                 </h4>
 
                                                                 <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Email:</span> {test.patient?.email || "N/A"}</p>
+                                                                    <p><span className="font-medium">Date of birth:</span> {test.patient?.dob || "N/A"}</p>
                                                                     <p><span className="font-medium">Address:</span> {test.patient?.address || "N/A"}</p>
                                                                     <p><span className="font-medium">Phone number:</span> {test.patient?.phone_number || "N/A"}</p>
                                                                     <p>
                                                                         <span className="font-medium">Insurance:</span>{" "}
                                                                         {test.patient?.insurance_provider || "N/A"}
                                                                     </p>
+                                                                   {/* Compute age from date of birth using day js */}
+                                                                    <p>
+                                                                        <span className="font-medium">Age:</span>{" "}
+                                                                        {test.patient?.dob
+                                                                            ? dayjs().diff(dayjs(test.patient.dob), "year")
+                                                                            : "N/A"}
+                                                                    </p>
                                                                     <p>
                                                                         <span className="font-medium">Insurance No.:</span>{" "}
                                                                         {test.patient?.insurance_number || "N/A"}
                                                                     </p>
+                                                                    <p><span className="font-medium">Gender:</span> {test.patient?.gender || "N/A"}</p>
                                                                 </div>
 
 
@@ -1547,7 +1625,7 @@ export function PatientLabTestRequests() {
 
                                 {activeTest && (
                                     <p className="text-2xl font-bold text-gray-600 dark:text-gray-400 mt-1">
-                                        Test: {activeTest.test_info?.test_type} | Patient: {activeTest.patient?.name}
+                                        Test: {activeTest.test_info?.test_type} | Patient: {activeTest.patient?.name} | Age: {activeTest.patient ? dayjs().diff(dayjs(activeTest.patient.dob), 'year') : 'N/A'} | {activeTest.patient?.gender}
                                     </p>
                                 )}
                             </div>
@@ -1589,8 +1667,10 @@ export function PatientLabTestRequests() {
                                     ))}
                                 </div>
                             ) : parameters.length === 0 ? (
-                                <p className="text-center text-gray-500 py-8">
-                                    No parameters configured for this test type.
+                                <p>
+                                    {totalConfiguredParameters === 0
+                                        ? "No parameters configured for this test type."
+                                        : "No parameters match this patient’s age and gender. Please configure reference ranges for this test type to fit the patient’s demographics."}
                                 </p>
                             ) : (
                                 <div className="space-y-4">

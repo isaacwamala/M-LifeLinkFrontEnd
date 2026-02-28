@@ -96,17 +96,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       ]
     },
 
-    // Sales
-    // Register stock
-    {
-      icon: Settings,
-      label: "Pharmacy sales",
-      hasDropdown: true,
-      children: [
-        { icon: Antenna, label: "register sale", link: "/register_pharmacy_sales" },
-        { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
-      ]
-    },
+  
 
     //Lab configs
     {
@@ -119,7 +109,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Specimens", icon: Settings, link: "/specimens" },
         { label: "Lab Test types", icon: Settings, link: "/test_types" },
         { label: "Specimens to test types", icon: Settings, link: "/manage_specimen/and_their_test_types" },
-        { label: "Configure Test types result parameters", icon: Settings, link: "/manage/test_types_result/parameter_measure/setup" },
+        { label: "Result parameters", icon: Settings, link: "/manage/test_types_result/parameter_measure/setup" },
 
       ]
 
@@ -150,6 +140,18 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
       ]
 
+    },
+
+     //Pharmacy Sales
+    {
+      icon: Settings,
+      label: "Pharmacy sales & dispensing ",
+      hasDropdown: true,
+      children: [
+         { label: "prescriptions & dispensing", icon: Settings, link: "/medical/prescriptions" },
+        { icon: Antenna, label: "register sale", link: "/register_pharmacy_sales" },
+        { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
+      ]
     },
 
 

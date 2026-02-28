@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, Plus, Edit
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
-import { fetchPatientCategories } from './patients_helper';
+import { fetchProductsItems } from '../products/products_helper';
 import { fetchDoctors } from './patients_helper';
 import { toast, ToastContainer } from 'react-toastify';
 import { fetchBasicPatientsInfoForDropDowns } from './patients_helper';
@@ -17,6 +17,7 @@ export function PatientVisits() {
     const navigate = useNavigate();
     const [visits, setPatientVisits] = useState([]);
     const [paients, setPatients] = useState([]);
+    const [products, setProducts] = useState([]);
     const [expandedRows, setExpandedRows] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const token = localStorage.getItem('access_token');
@@ -25,7 +26,7 @@ export function PatientVisits() {
     const [editingVisit, setEditingVisit] = useState(null);
     const [submitting, setSubmitting] = useState(false);
     const [doctors, setDoctors] = useState([]);
-
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [showAddPatient, setShowAddPatient] = useState(false);
@@ -58,10 +59,24 @@ export function PatientVisits() {
         visit_end_time: '',
         assigned_doctor_id: '',
     };
-
-
     // Form state for patients creation
     const [formData, setFormData] = useState(initialFormData);
+
+    //New states for the prescription modal
+    const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+    const [activeVisit, setActiveVisit] = useState(null);
+    const [prescriptionForm, setPrescriptionForm] = useState({
+        prescription_source: 'direct',
+        prescription_notes: '',
+        prescription_date: new Date().toISOString().split('T')[0],
+        items: [],
+    });
+
+    //Function to open the prescription modal
+    const openPrescriptionModal = (visit) => {
+        setActiveVisit(visit);
+        setIsPrescriptionModalOpen(true);
+    };
 
 
 
@@ -106,6 +121,13 @@ export function PatientVisits() {
         setLoading(false);
     };
 
+
+    //fetch products
+    const loadProducts = async () => {
+        const data = await fetchProductsItems(token);
+        setProducts(data);
+    };
+
     //Load basic patients info for dropdowns
     const loadBasicPatientsInfoForDropdown = async () => {
         setLoading(true);
@@ -118,6 +140,7 @@ export function PatientVisits() {
     useEffect(() => {
         fetchAllPatientVists(1);
         loadDoctors();
+        loadProducts();
         loadBasicPatientsInfoForDropdown();
     }, [token, dateFrom, dateTo]);
 
@@ -148,7 +171,7 @@ export function PatientVisits() {
 
 
             const visitDate = new Date(v.visit_date);
-            
+
 
             const matchesDateFrom = !dateFrom || visitDate >= new Date(dateFrom);
             const matchesDateTo = !dateTo || visitDate <= new Date(dateTo);
@@ -210,7 +233,6 @@ export function PatientVisits() {
     };
 
 
-
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingVisit(null);
@@ -253,6 +275,107 @@ export function PatientVisits() {
             setSubmitting(false);
         }
     };
+
+    // #-------- PRECRIPTION ------------# //
+
+    //Function to add prescription item
+    const addPrescriptionItem = () => {
+        setPrescriptionForm((prev) => ({
+            ...prev,
+            items: [
+                ...prev.items,
+                {
+                    drug_id: '',
+                    strength: '',
+                    instructions: '',
+                    quantity: null,
+                    duration_days: '',
+                },
+            ],
+        }));
+    };
+
+    //function to update prescription item
+    const updatePrescriptionItem = (index, field, value) => {
+        const updatedItems = [...prescriptionForm.items];
+        updatedItems[index][field] = value;
+
+        setPrescriptionForm({
+            ...prescriptionForm,
+            items: updatedItems,
+        });
+    };
+
+    //Function to remove prescription item
+    const removePrescriptionItem = (index) => {
+        const updatedItems = prescriptionForm.items.filter((_, i) => i !== index);
+
+        setPrescriptionForm({
+            ...prescriptionForm,
+            items: updatedItems,
+        });
+    };
+
+
+
+    //Submit The creation of medical prescription
+  // ===== Submit the creation of medical prescription =====
+const submitPrescription = async () => {
+    if (!activeVisit) return;
+    
+
+    // Validate prescription items
+    for (let i = 0; i < prescriptionForm.items.length; i++) {
+        const item = prescriptionForm.items[i];
+        if (!item.drug_id) {
+            toast.error(`Please select a medicine for item ${i + 1}`);
+            setIsSubmitting(false);
+            return;
+        }
+        if (!item.instructions || item.instructions.trim() === '') {
+            toast.error(`Please provide instructions for item ${i + 1}, This defines how the medication will be taken which even helps the pharmacist dispense it effectively`);
+            setIsSubmitting(false);
+            return;
+        }
+        if (!item.duration_days || item.duration_days <= 0) {
+            toast.error(`Please provide valid duration (days) for item ${i + 1}, This is the period it will take for this medication to be completed` );
+            setIsSubmitting(false);
+            return;
+        }
+    }
+
+    const payload = {
+        patient_visit_id: activeVisit.id,
+        prescription_source: prescriptionForm.prescription_source,
+        prescription_notes: prescriptionForm.prescription_notes,
+        prescription_date: prescriptionForm.prescription_date,
+        items: prescriptionForm.items,
+    };
+
+    try {
+        setIsSubmitting(true);
+        const response = await axios.post(
+            `${API_BASE_URL}sales/storePrescription`,
+            payload,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/json',
+                },
+            }
+        );
+
+        toast.success(response.data.message);
+        setIsPrescriptionModalOpen(false);
+        navigate('/medical/prescriptions');
+    } catch (error) {
+        toast.error(error.response?.data?.message || 'Failed to create prescription');
+        console.error("Error creating prescription:", error);
+    } finally {
+        setIsSubmitting(false);
+    }
+};
+
 
 
 
@@ -471,7 +594,14 @@ export function PatientVisits() {
                                                     Lab Test
                                                 </button>
 
-
+                                                {/* Function to create a medial prescription on patient visit*/}
+                                                <button
+                                                    onClick={() => openPrescriptionModal(visit)}
+                                                    className="ml-2 flex items-center gap-1 text-purple-600 hover:text-purple-500"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Prescription
+                                                </button>
 
                                             </td>
                                         </tr>
@@ -510,11 +640,11 @@ export function PatientVisits() {
                                                                 {visit.visit_reason ?? "N/A"}
                                                             </p>
 
-                                                              <h4 className="text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                                                            <h4 className="text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
                                                                 <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                                                 Patient Info
                                                             </h4>
-                                                             <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                            <p className="text-sm text-gray-600 dark:text-gray-300">
                                                                 {visit.patient.phone_number ?? "N/A"}
                                                             </p>
 
@@ -815,6 +945,266 @@ export function PatientVisits() {
                 </div>
             )}
 
+
+
+            {/* Modal to create a medical prescription  */}
+            {/* ================= PRESCRIPTION MODAL ================= */}
+            {isPrescriptionModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl
+            bg-white dark:bg-gray-900 shadow-xl">
+
+                        {/* ================= HEADER ================= */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between
+                border-b border-gray-200 dark:border-gray-700
+                px-6 py-4 bg-white dark:bg-gray-900">
+
+                            <div>
+                                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+                                   Create  Medical Prescription On This Patient Visit
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Visit No: <span className="font-medium">{activeVisit?.visit_number}</span>
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setIsPrescriptionModalOpen(false)}
+                                className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        {/* ================= BODY ================= */}
+                        <div className="px-6 py-6 space-y-8">
+
+                            {/* ===== Prescription Meta ===== */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">
+                                        Source *
+                                    </label>
+                                    <select
+                                        value={prescriptionForm.prescription_source}
+                                        onChange={(e) =>
+                                            setPrescriptionForm({
+                                                ...prescriptionForm,
+                                                prescription_source: e.target.value,
+                                            })
+                                        }
+                                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600
+                 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold
+                 px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                    >
+                                        <option value="">Select Source</option>
+                                        <option value="direct">Direct</option>
+                                        <option value="from_lab">From Lab</option>
+                                        <option value="external">External</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">
+                                        Prescription Date *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={prescriptionForm.prescription_date}
+                                        onChange={(e) =>
+                                            setPrescriptionForm({
+                                                ...prescriptionForm,
+                                                prescription_date: e.target.value,
+                                            })
+                                        }
+                                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600
+                 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold
+                 px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* ===== Notes ===== */}
+                            <div>
+                                <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">
+                                    Prescription Notes
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    value={prescriptionForm.prescription_notes}
+                                    onChange={(e) =>
+                                        setPrescriptionForm({
+                                            ...prescriptionForm,
+                                            prescription_notes: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Additional clinical instructions…"
+                                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600
+               bg-white dark:bg-gray-800 text-gray-900 dark:text-white
+               px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                />
+                            </div>
+
+
+                            {/* ================= MEDICINES ================= */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                        Prescribed Medicines
+                                    </h3>
+
+                                    <button
+                                        onClick={addPrescriptionItem}
+                                        className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                        Add medicine
+                                    </button>
+                                </div>
+
+                                {prescriptionForm.items.length === 0 && (
+                                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700
+                            py-6 text-center text-sm text-gray-500">
+                                        No medicines added
+                                    </div>
+                                )}
+
+                                {prescriptionForm.items.map((item, index) => (
+                                    <div
+                                        key={index}
+                                        className="rounded-xl border border-gray-200 dark:border-gray-700
+        p-4 grid grid-cols-1 md:grid-cols-7 gap-4 bg-white dark:bg-gray-900"
+                                    >
+                                        {/* Medicine */}
+                                        <div className="md:col-span-2">
+                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">
+                                                Medicine *
+                                            </label>
+                                            <select
+                                                value={item.drug_id || ''}
+                                                onChange={(e) =>
+                                                    updatePrescriptionItem(index, 'drug_id', Number(e.target.value))
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-sm
+                                                bg-white dark:bg-gray-800
+                                                text-gray-900 dark:text-white
+                                                border border-gray-300 dark:border-gray-600
+                                                focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                            >
+                                                <option value="">Select medicine</option>
+                                                {products.map((product) => (
+                                                    <option key={product.id} value={product.id}>
+                                                        {product.name}
+                                                        {product.variant_options?.length
+                                                            ? ' — ' +
+                                                            product.variant_options
+                                                                .map(v => v.option_value)
+                                                                .join(' / ')
+                                                            : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Strength */}
+                                        <div>
+                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">
+                                                Strength
+                                            </label>
+                                            <input
+                                                value={item.strength}
+                                                onChange={(e) =>
+                                                    updatePrescriptionItem(index, 'strength', e.target.value)
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-sm
+                bg-white dark:bg-gray-800
+                text-gray-900 dark:text-white
+                border border-gray-300 dark:border-gray-600"
+                                            />
+                                        </div>
+
+                                        {/* Instructions */}
+                                        <div className="md:col-span-2">
+                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">
+                                                Instructions
+                                            </label>
+                                            <input
+                                                value={item.instructions}
+                                                onChange={(e) =>
+                                                    updatePrescriptionItem(index, 'instructions', e.target.value)
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-sm
+                bg-white dark:bg-gray-800
+                text-gray-900 dark:text-white
+                border border-gray-300 dark:border-gray-600"
+                                            />
+                                        </div>
+
+                                        {/* Days */}
+                                        <div>
+                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">
+                                                Duration Days
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={item.duration_days}
+                                                onChange={(e) =>
+                                                    updatePrescriptionItem(index, 'duration_days', e.target.value)
+                                                }
+                                                className="w-full rounded-lg px-3 py-2 text-sm
+                bg-white dark:bg-gray-800
+                text-gray-900 dark:text-white
+                border border-gray-300 dark:border-gray-600"
+                                            />
+                                        </div>
+
+                                        {/* Remove */}
+                                        <div className="flex items-end justify-center">
+                                            <button
+                                                onClick={() => removePrescriptionItem(index)}
+                                                className="mb-1 rounded-lg p-2
+                text-gray-500 hover:text-red-600
+                hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                title="Remove medicine"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                            </div>
+                        </div>
+
+                        {/* ================= FOOTER ================= */}
+                        <div className="flex justify-end gap-3 px-6 py-4
+                border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+
+                            <button
+                                onClick={() => setIsPrescriptionModalOpen(false)}
+                                className="px-5 py-2 rounded-lg text-sm
+                        bg-gray-200 dark:bg-gray-700"
+                            >
+                                Cancel
+                            </button>
+
+                            {/* ===== Submit Button ===== */}
+                            <button
+                                disabled={isSubmitting}
+                                onClick={submitPrescription}
+                                className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <span className="loader border-2 border-t-transparent border-white w-5 h-5 rounded-full animate-spin"></span>
+                                ) : (
+                                    "Save Prescription"
+                                )}
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+            )}
 
 
 

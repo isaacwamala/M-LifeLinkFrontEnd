@@ -31,7 +31,7 @@ function RegisterPharmacySales() {
     });
 
     const [paymentMethod, setPaymentMethod] = useState("cash");
-    const [paymentDate, setPaymentDate] = useState("");
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
 
     //This fetches products along with their batches and UOM conversions
     //It also sorts the batches by expiry date (nearest first)

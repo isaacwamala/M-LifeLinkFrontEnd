@@ -55,8 +55,8 @@ import ManageTestTypeResultManager from "./components/lab/ManageTestTypeResultMa
 
 //reporting
 import { PatientTestAndResultReports } from "./components/patients/PatientTestAndResultReports.js";
-
-
+//Prescripions
+import { PatientMedicalPrescriptions } from "./components/pharmacy_sales/PatientMedicalPrescriptions.js";
 
 
 
@@ -154,7 +154,8 @@ function App() {
                 {/* Patient Reporting */}
                 <Route path="/patient_test_and_results" element={<PatientTestAndResultReports />} />
 
-           
+                <Route path="/medical/prescriptions" element={<PatientMedicalPrescriptions />} />
+
 
               </Routes>
 
