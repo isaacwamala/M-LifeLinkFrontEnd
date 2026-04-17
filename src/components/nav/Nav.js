@@ -8,7 +8,7 @@ import { API_BASE_URL } from "../general/constants";
 import apiRequest from "../general/common";
 
 export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
-  const [openDropdowns, setOpenDropdowns] = useState({});
+  const [openDropdown, setOpenDropdown] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const { user } = useSelector((state) => state.auth);
   const { role } = useSelector((state) => state.roles);
@@ -24,55 +24,38 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
     {
       icon: Settings,
-      label: "Configurations",
+      label: "System settings",
       hasDropdown: true,
       children: [
-        { label: "Unit Of Measure", icon: Settings, link: "/unit_of_measure" },
-        { label: "UOM converter", icon: Shield, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
+        { label: "a", icon: Settings, link: "#" },
+        { label: "b", icon: Shield, link: "#" },
+      ]
+    },
+
+    {
+      icon: Users,
+      label: "User management",
+      hasDropdown: true,
+      children: [
+        { label: "register user", icon: Shield, link: "/create_user_account" },
+        { label: "All Users", icon: Users, link: "/users" },
+        { label: "Assign roles", icon: Shield, link: "/assign_role_to_user" },
+        { label: "Account types", icon: FileText, link: "/usergroups" },
       ]
     },
 
     // Ware house and supplier management
     {
       icon: Settings,
-      label: "Warehouse/Suppliers",
+      label: "Stock & suppliers",
       hasDropdown: true,
       children: [
         { label: "Suppliers", icon: Settings, link: "/suppliers" },
         { label: "WareHouses", icon: Shield, link: "/warehouses" },
-      ]
-    },
-
-    // Hospital items/equipements
-    {
-      icon: Settings,
-      label: "Pharmacuetical items",
-      hasDropdown: true,
-      children: [
-        { icon: Antenna, label: "item categories", link: "/categories" },
-        { label: "medical items", icon: Settings, link: "/medical_supply_items" },
-      ]
-    },
-
-    //Purchase orders
-    {
-      icon: Settings,
-      label: "Purchase orders",
-      hasDropdown: true,
-      children: [
         { icon: Antenna, label: "create purchase order", link: "/create_purchase_order" },
         { label: "purchase orders", icon: Settings, link: "/purchase_orders" },
         { label: "Manage supplier payments", icon: Settings, link: "/supplier/order_payments" },
         { label: "Track supplier order payments", icon: Settings, link: "/supplier/order_payments/analysis" },
-      ]
-    },
-
-    // Register stock
-    {
-      icon: Settings,
-      label: "Stock Management",
-      hasDropdown: true,
-      children: [
         { icon: Antenna, label: "register stock", link: "/register_medical_stock" },
         { label: "Manage stock", icon: Settings, link: "/medical_stock" },
         { label: "stock adjustments", icon: Settings, link: "/stock_adjustments" },
@@ -84,24 +67,25 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
     // Inventory
     { icon: Antenna, label: "Inventory", link: "/inventory" },
 
+    //Lab configs
     {
-      icon: Users,
-      label: "Auth & OAuth",
+      icon: Settings,
+      label: "Patients and Visits",
       hasDropdown: true,
       children: [
-        { label: "register user", icon: Shield, link: "/create_user_account" },
-        { label: "All Users", icon: Users, link: "/users" },
-        { label: "Assign roles", icon: Shield, link: "/assign_role_to_user" },
-        { label: "Account types", icon: FileText, link: "/usergroups" },
+        { icon: Antenna, label: "Manage patients", link: "/patients" },
+        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
+
+
       ]
+
     },
 
-  
 
     //Lab configs
     {
       icon: Settings,
-      label: "Lab Configurations",
+      label: "Laboratory",
       hasDropdown: true,
       children: [
         { icon: Antenna, label: "Manage lab sections", link: "/lab_sections" },
@@ -110,31 +94,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Lab Test types", icon: Settings, link: "/test_types" },
         { label: "Specimens to test types", icon: Settings, link: "/manage_specimen/and_their_test_types" },
         { label: "Result parameters", icon: Settings, link: "/manage/test_types_result/parameter_measure/setup" },
-
-      ]
-
-    },
-
-    //Lab configs
-    {
-      icon: Settings,
-      label: "Patients",
-      hasDropdown: true,
-      children: [
-        { icon: Antenna, label: "Manage patients", link: "/patients" },
-        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
         { label: "Patient Lab Tests ", icon: Settings, link: "/patient_lab/test/requests" },
-
-      ]
-
-    },
-
-    //LAB REPORTS
-    {
-      icon: Settings,
-      label: "Patient Reports",
-      hasDropdown: true,
-      children: [
         { icon: Antenna, label: "Tests and Results", link: "/patient_test_and_results" },
 
 
@@ -142,29 +102,26 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
     },
 
-     //Pharmacy Sales
+
     {
       icon: Settings,
-      label: "Pharmacy sales & dispensing ",
+      label: "Pharmacy",
       hasDropdown: true,
       children: [
-         { label: "prescriptions & dispensing", icon: Settings, link: "/medical/prescriptions" },
+        { label: "Unit Of Measure", icon: Settings, link: "/unit_of_measure" },
+        { label: "UOM converter", icon: Shield, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
+        { icon: Antenna, label: "item categories", link: "/categories" },
+        { label: "medical items", icon: Settings, link: "/medical_supply_items" },
+        { label: "prescriptions & dispensing", icon: Settings, link: "/medical/prescriptions" },
         { icon: Antenna, label: "register sale", link: "/register_pharmacy_sales" },
         { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
       ]
     },
 
-
-
-
-
   ];
 
   const toggleDropdown = (index) => {
-    setOpenDropdowns(prev => ({
-      ...prev,
-      [index]: !prev[index]
-    }));
+    setOpenDropdown(prev => prev === index ? null : index);
   };
 
   const toggleUserModal = () => {
@@ -299,7 +256,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
             <ul className="space-y-2">
               {menuItems.map((item, index) => {
                 const Icon = item.icon;
-                const isOpen = openDropdowns[index];
+                const isOpen = openDropdown === index;
 
                 return (
                   <li key={index} className="group relative">
