@@ -38,7 +38,8 @@ import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
 
 
 import { Patients } from "./components/patients/Patients.js";
-import { PatientVisits } from "./components/patients/PatientVisits.js";
+import { PatientVisit } from "./components/patients/PatientVisit.js";
+
 
 import { LabSections } from "./components/lab/LabSections.js";
 import { LabInstruments } from "./components/lab/LabInstruments.js";
@@ -58,6 +59,9 @@ import { PatientTestAndResultReports } from "./components/patients/PatientTestAn
 //Prescripions
 import { PatientMedicalPrescriptions } from "./components/pharmacy_sales/PatientMedicalPrescriptions.js";
 
+import MedicalRoom from "./components/configurations/MedicalRoom.js"
+import DoctorAssignRooms from "./components/configurations/DoctorAssignRooms.js";
+import WardManager from "./components/configurations/WardManager.js";
 
 
 function App() {
@@ -89,6 +93,8 @@ function App() {
                 <Route path="/create_user_account" element={<CreateUserAccount />} />
                 <Route path="/users" element={<UserAccountLists />} />
                 <Route path="/assign_role_to_user" element={<AssignRoleToUser />} />
+               
+                
                 <Route path="/account_settings" element={<AccountSettings />} />
 
                 {/* Suppliers and stock */}
@@ -132,7 +138,7 @@ function App() {
                 <Route path="/patients" element={<Patients />} />
 
                 {/* Patient Visits */}
-                <Route path="/patient_visits" element={<PatientVisits />} />
+                <Route path="/patient_visits" element={<PatientVisit />} />
 
                 {/* Lab Sections */}
                 <Route path="/lab_sections" element={<LabSections />} />
@@ -155,6 +161,10 @@ function App() {
                 <Route path="/patient_test_and_results" element={<PatientTestAndResultReports />} />
 
                 <Route path="/medical/prescriptions" element={<PatientMedicalPrescriptions />} />
+
+                <Route path="/medical_rooms" element={<MedicalRoom />} />
+                <Route path="/doctor/rooms/assignments" element={<DoctorAssignRooms />} />
+                <Route path="/ward_manager" element={<WardManager />} />
 
 
               </Routes>

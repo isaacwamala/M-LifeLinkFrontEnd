@@ -51,7 +51,7 @@ export const fetchDoctors = async (token) => {
 
     try {
         const response = await axios.get(
-            `${API_BASE_URL}patient/getDoctors`,
+            `${API_BASE_URL}set/getDoctors`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -109,6 +109,76 @@ export const fetchBasicPatientsInfoForDropDowns = async (token) => {
 
     } catch (error) {
         console.error("Error fetching patients:", error);
+
+        const backendMessage =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            "Server error.";
+
+        toast.error(backendMessage);
+        return [];
+    }
+};
+
+// Fetch medical rooms 
+export const fetchMedicalRooms = async (token) => {
+    if (!token) return [];
+
+    try {
+        const response = await axios.get(
+            `${API_BASE_URL}set/getMedicalRooms`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+
+        const rooms = response.data.rooms || [];
+
+        return rooms.map((d) => ({
+            id: d.id,
+            room_name: d.room_name,
+            room_number: d.room_number,
+            status: d.status,
+            branch_name: d.branch?.branch_name,
+          
+        }));
+
+    } catch (error) {
+        console.error("Error fetching rooms:", error);
+
+        const backendMessage =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            "Server error.";
+
+        toast.error(backendMessage);
+        return [];
+    }
+};
+
+
+//Fetch rooms with assigned doctors
+export const fetchRoomsWithAssignedDoctors = async (token) => {
+    if (!token) return [];
+
+    try {
+        const response = await axios.get(
+            `${API_BASE_URL}set/getRoomsWithAssignedDoctors`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                },
+            }
+        );
+
+        return response.data.data || [];
+
+    } catch (error) {
+        console.error("Error fetching rooms:", error);
 
         const backendMessage =
             error.response?.data?.message ||
