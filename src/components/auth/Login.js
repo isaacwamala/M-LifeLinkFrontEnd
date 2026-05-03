@@ -14,7 +14,7 @@ import mediconnect from "../assets/mediconnect.png";
 const ROLE_CARDS = [
   {
     key: 'admin',
-   // roleId: 1,//As they really are from backend
+    // roleId: 1,//As they really are from backend
     title: 'Global Administrator',
     subtitle: 'Full system access',
     icon: ShieldCheck,
@@ -95,6 +95,8 @@ function Login() {
       toast.success(response.data.message);
 
       const data = JSON.stringify({ username, password });
+      //Dispatch login action to store user data in redux store 
+      // and fetch user roles for role-based access control
       dispatch(loginUser(data));
       dispatch(fetchUserRoles());
 
@@ -177,7 +179,7 @@ function Login() {
                         <Icon className={`w-7 h-7 ${c.icon}`} />
                       </div>
                       <div>
-                    
+
                         <p className="text-gray-800 text-base font-medium">{role.title}</p>
                         <p className="text-gray-400 text-xs mt-1">{role.subtitle}</p>
                       </div>
@@ -208,10 +210,9 @@ function Login() {
               {/* Selected role badge */}
               <div className="text-center mb-6">
                 <div className="inline-flex items-center gap-2 bg-white/15 border border-white/25 rounded-full px-4 py-1.5 mb-4">
-                  <span className={`w-2 h-2 rounded-full ${
-                    selectedRole.color === 'blue' ? 'bg-blue-300' :
-                    selectedRole.color === 'teal' ? 'bg-teal-300' : 'bg-amber-300'
-                  }`}></span>
+                  <span className={`w-2 h-2 rounded-full ${selectedRole.color === 'blue' ? 'bg-blue-300' :
+                      selectedRole.color === 'teal' ? 'bg-teal-300' : 'bg-amber-300'
+                    }`}></span>
                   <span className="text-white text-sm font-medium">{selectedRole.title}</span>
                 </div>
                 <h2 className="text-white text-2xl font-medium">Sign in to your account</h2>

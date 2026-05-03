@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Menu, Home, BarChart3, Users, Settings, Bell, Antenna, User, ArchiveRestore, ChevronLeft, ChevronDown, ChevronRight, FileText, Folder, Shield, LogOut, UserCircle } from "lucide-react";
+import {
+  Menu, Home, BarChart3, Users, Settings, Bell,
+  Antenna, User, ArchiveRestore, ChevronLeft, ChevronDown, ChevronRight, Wrench,
+  FileText, Folder, Shield, LogOut, UserCircle, Store, Hospital, FlaskConical, Pill, AlignVerticalJustifyEnd
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from '../assets/i.png';
 import { useSelector, useDispatch } from "react-redux";
@@ -23,12 +27,13 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
     // { icon: Antenna, label: "Products Categories", link: "/categories" },
 
     {
-      icon: Settings,
-      label: "System settings",
+      icon: Wrench,
+      label: "Medical configurations",
       hasDropdown: true,
       children: [
-        { label: "a", icon: Settings, link: "#" },
-        { label: "b", icon: Shield, link: "#" },
+        { label: "Wards", icon: Shield, link: "/ward_manager" },
+        { label: "Medical rooms", icon: Settings, link: "/medical_rooms" },
+        { label: "Assign doctors to rooms", icon: Shield, link: "/doctor/rooms/assignments" },
       ]
     },
 
@@ -46,16 +51,24 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
     // Ware house and supplier management
     {
-      icon: Settings,
-      label: "Stock & suppliers",
+      icon: Store,
+      label: "Suppliers and purchases",
       hasDropdown: true,
       children: [
         { label: "Suppliers", icon: Settings, link: "/suppliers" },
         { label: "WareHouses", icon: Shield, link: "/warehouses" },
         { icon: Antenna, label: "create purchase order", link: "/create_purchase_order" },
         { label: "purchase orders", icon: Settings, link: "/purchase_orders" },
-        { label: "Manage supplier payments", icon: Settings, link: "/supplier/order_payments" },
-        { label: "Track supplier order payments", icon: Settings, link: "/supplier/order_payments/analysis" },
+        { label: "Supplier payments", icon: Settings, link: "/supplier/order_payments" },
+        { label: "Supplier order payments", icon: Settings, link: "/supplier/order_payments/analysis" },
+      ]
+    },
+
+    {
+      icon: Store,
+      label: "Stock management",
+      hasDropdown: true,
+      children: [
         { icon: Antenna, label: "register stock", link: "/register_medical_stock" },
         { label: "Manage stock", icon: Settings, link: "/medical_stock" },
         { label: "stock adjustments", icon: Settings, link: "/stock_adjustments" },
@@ -64,27 +77,35 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       ]
     },
 
-    // Inventory
-    { icon: Antenna, label: "Inventory", link: "/inventory" },
 
-    //Lab configs
+
+    // Inventory 
+    { icon: AlignVerticalJustifyEnd, label: "Inventory", link: "/inventory" },
+
+    //Lab configs 
     {
-      icon: Settings,
-      label: "Patients and Visits",
+      icon: Users,
+      label: "Patients",
       hasDropdown: true,
       children: [
         { icon: Antenna, label: "Manage patients", link: "/patients" },
-        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
-
-
       ]
+    },
 
+    //Patient Visits 
+    {
+      icon: Hospital,
+      label: "Visits",
+      hasDropdown: true,
+      children: [
+        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
+      ]
     },
 
 
-    //Lab configs
+    //Lab configs 
     {
-      icon: Settings,
+      icon: FlaskConical,
       label: "Laboratory",
       hasDropdown: true,
       children: [
@@ -104,7 +125,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
 
     {
-      icon: Settings,
+      icon: Pill,
       label: "Pharmacy",
       hasDropdown: true,
       children: [
