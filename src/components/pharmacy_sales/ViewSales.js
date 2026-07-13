@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, HandCoins, Package, User, Phone, MapPin, CreditCard, DollarSign, Hash, ChevronRight, ChevronLeft } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, HandCoins, Package, User, Phone, MapPin, CreditCard, DollarSign, Hash, ChevronRight, ChevronLeft, FileText, Download, X } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
+import { toast } from 'react-toastify';
 
 
 export function ViewSales() {
@@ -18,6 +19,12 @@ export function ViewSales() {
     //Set current page due to paginations from back end
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+
+    // PDF receipt preview
+    const [showReceiptModal, setShowReceiptModal] = useState(false);
+    const [receiptUrl, setReceiptUrl] = useState(null);
+    const [receiptLoading, setReceiptLoading] = useState(false);
+    const [receiptFileName, setReceiptFileName] = useState('');
 
     const now = new Date();
     // Ensure we show data for this month of the current year, as back end returns them by default
@@ -155,9 +162,43 @@ export function ViewSales() {
         });
     };
 
+    const closeReceiptModal = () => {
+        setShowReceiptModal(false);
+        setReceiptLoading(false);
+        if (receiptUrl) {
+            URL.revokeObjectURL(receiptUrl);
+            setReceiptUrl(null);
+        }
+        setReceiptFileName('');
+    };
+
+    const openReceiptPreview = async (sale) => {
+        setReceiptUrl(null);
+        setReceiptFileName(`${sale.sale_number}_receipt.pdf`);
+        setReceiptLoading(true);
+        setShowReceiptModal(true);
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}sales/receipt`,
+                { sale_id: sale.id },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'blob',
+                }
+            );
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            setReceiptUrl(URL.createObjectURL(blob));
+        } catch (err) {
+            toast.error('Failed to generate receipt');
+            closeReceiptModal();
+        } finally {
+            setReceiptLoading(false);
+        }
+    };
+
     return (
         <>
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-5">
+            <div className="rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900 mt-5 bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-100 dark:bg-gradient-to-br dark:from-violet-950 dark:via-indigo-900 dark:to-teal-950">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
 
                     <div className="flex flex-col gap-2 mb-4">
@@ -289,24 +330,27 @@ export function ViewSales() {
                             ) : (
                                 filteredSales.map((sale) => (
                                     <React.Fragment key={sale.sale_number}>
-                                        <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                                        <tr
+                                            className="hover:bg-blue-50/40 dark:hover:bg-gray-800 transition cursor-pointer select-none"
+                                            onClick={() => toggleRow(sale.sale_number)}
+                                        >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="text-blue-600 font-bold dark:text-blue-400">{sale.sale_number}</span>
                                             </td>
-                                            <td className="px-6 py-4 font-bold  text-gray-900 dark:text-gray-200">
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-gray-200">
                                                 {formatDate(sale.payment_date)}
                                             </td>
-                                            <td className="px-6 py-4 font-bold  text-gray-900 dark:text-gray-200">{sale.user}</td>
-                                            <td className="px-6 py-4 font-bold  text-gray-900 dark:text-gray-200">{sale.branch}</td>
-                                            <td className="px-6 py-4 font-bold  text-gray-900 dark:text-gray-200">
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-gray-200">{sale.user}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-gray-200">{sale.branch}</td>
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-gray-200">
                                                 {sale.customer_details.name || 'Walk-in Customer'}
                                             </td>
-                                            <td className="px-6 py-4 font-bold  text-gray-900 dark:text-gray-200">
+                                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-gray-200">
                                                 {formatCurrency(sale.total_amount)}
                                             </td>
 
                                             <td className="px-6 py-4">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-medium">
+                                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 font-semibold">
                                                     {sale.payment_method
                                                         .split("_")
                                                         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -314,19 +358,14 @@ export function ViewSales() {
                                                 </span>
                                             </td>
 
-
-
-                                            <td className="px-6 py-4">
-                                                <button
-                                                    onClick={() => toggleRow(sale.sale_number)}
-                                                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                                                >
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                                                     {expandedRows.has(sale.sale_number) ? (
-                                                        <ChevronUp className="w-5 h-5" />
+                                                        <ChevronUp className="w-4 h-4" />
                                                     ) : (
-                                                        <ChevronDown className="w-5 h-5" />
+                                                        <ChevronDown className="w-4 h-4" />
                                                     )}
-                                                </button>
+                                                </div>
                                             </td>
                                         </tr>
 
@@ -587,8 +626,16 @@ export function ViewSales() {
                                                             </div>
                                                         </div>
 
-
-
+                                                        {/* View Receipt button */}
+                                                        <div className="flex justify-end mt-2">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); openReceiptPreview(sale); }}
+                                                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                                View Receipt
+                                                            </button>
+                                                        </div>
 
                                                     </div>
                                                 </td>
@@ -632,6 +679,53 @@ export function ViewSales() {
                     </div>
                 </div>
             </div>
+
+        {/* ── Receipt PDF Preview Modal ── */}
+        {showReceiptModal && (
+            <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                        {receiptFileName || 'Sale Receipt'}
+                    </h3>
+                    <div className="flex items-center gap-3">
+                        {receiptUrl && (
+                            <a
+                                href={receiptUrl}
+                                download={receiptFileName}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Download
+                            </a>
+                        )}
+                        <button
+                            onClick={closeReceiptModal}
+                            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                    {receiptLoading ? (
+                        <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+                            <span className="text-sm">Generating receipt&hellip;</span>
+                        </div>
+                    ) : receiptUrl ? (
+                        <iframe
+                            src={receiptUrl}
+                            title={receiptFileName}
+                            className="w-full h-full border-0"
+                            style={{ minHeight: 0 }}
+                        />
+                    ) : null}
+                </div>
+            </div>
+        )}
 
         </>
     );

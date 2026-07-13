@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Edit, Eye, X, Shield, Store, Users } from "lucide-react";
+import { Edit, X, Search, Plus, Grid3X3 } from "lucide-react";
 import { API_BASE_URL } from "../general/constants";
 import axios from "axios";
 import { toast, ToastContainer } from 'react-toastify';
@@ -44,11 +44,12 @@ export function LabSections() {
     const labSectionsPerPage = 6;
 
     // Filter lab sections based on search query, 
+    // Filter lab sections based on search query, 
     const filteredLabSections = labSections.filter((section) => {
         const query = searchQuery.toLowerCase();
         return (
-            section.lab_section_name.toLowerCase().includes(query) ||
-            section.description.toLowerCase().includes(query)
+            (section.lab_section_name || "").toLowerCase().includes(query) ||
+            (section.description || "").toLowerCase().includes(query)
         );
     });
 
@@ -173,210 +174,211 @@ export function LabSections() {
     return (
         <>
             <ToastContainer />
-            <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-8 transition-colors duration-300 dashboard">
-                <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-                        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                            Laboratory Sections
-                        </h1>
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 sm:p-8 transition-colors duration-300 dashboard">
+                <div className="w-full">
+
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center shrink-0">
+                                <Grid3X3 className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Laboratory Sections</h1>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{filteredLabSections.length} section{filteredLabSections.length !== 1 ? 's' : ''} configured</p>
+                            </div>
+                        </div>
                         <button
                             onClick={openAddModal}
-                            className="px-5 py-2.5 text-white font-bold rounded bg-gradient-to-r from-blue-700 to-purple-900 transition-colors duration-200 w-full md:w-auto"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 transition-colors w-full sm:w-auto justify-center shadow-sm"
                         >
-                            + Add section
+                            <Plus className="w-4 h-4" />
+                            Add Section
                         </button>
                     </div>
 
+                    {/* Table card */}
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
 
-                    <input
-                        type="text"
-                        placeholder="Search section by name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full mb-6 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-
-                    {/* lab sections grid */}
-                    <SkeletonTheme baseColor="#e5e7eb" highlightColor="#f3f4f6" borderRadius="0.75rem">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {loading ? (
-                                // 🦴 Skeleton placeholders while fetching lab sections
-                                Array.from({ length: 6 }).map((_, i) => (
-                                    <div
-                                        key={i}
-                                        className="p-5 bg-gray-50 dark:bg-gray-700 rounded-lg shadow border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <Skeleton width={`80%`} height={20} className="mb-2" />
-                                        <Skeleton width={`60%`} height={16} className="mb-2" />
-                                        <Skeleton width={`90%`} height={16} className="mb-2" />
-                                        <Skeleton width={`50%`} height={16} className="mb-2" />
-                                        <Skeleton width={`70%`} height={16} className="mb-2" />
-                                        <Skeleton width={`100%`} height={16} className="mb-3" />
-
-                                        <div className="flex gap-3 mt-4">
-                                            <Skeleton height={36} width="48%" />
-                                            <Skeleton height={36} width="48%" />
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                // Current lab sections
-                                currentLabSections.map((section) => (
-                                    <div
-                                        key={section.id}
-                                        className="p-5 bg-gray-50 dark:bg-gray-700 rounded-lg shadow border border-gray-200 dark:border-gray-600"
-                                    >
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                            {section.lab_section_name}
-                                        </h3>
-
-                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                            {section.description || 'No description'}
-                                        </h3>
-
-
-                                        <div className="flex gap-3 mt-4">
-                                            <button
-                                                onClick={() => openEditModal(section)}
-                                                className="flex-1 px-4 py-2 text-white font-bold rounded-lg bg-gradient-to-r from-blue-700 to-purple-900 transition-colors duration-300"
-                                            >
-                                                Edit
-                                            </button>
-
-                                            {/* <button
-                                                onClick={() => handleDelete(supplier.id)}
-                                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-500"
-                                            >
-                                                Delete
-                                            </button> */}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
+                        {/* Search */}
+                        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                            <div className="relative max-w-sm">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search sections..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                                />
+                            </div>
                         </div>
-                    </SkeletonTheme>
 
+                        {/* Table */}
+                        <SkeletonTheme baseColor="#e5e7eb" highlightColor="#f3f4f6">
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[500px]">
+                                    <thead>
+                                        <tr className="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
+                                            <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">#</th>
+                                            <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Section Name</th>
+                                            <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                                            <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                                        {loading ? (
+                                            Array.from({ length: 6 }).map((_, i) => (
+                                                <tr key={i}>
+                                                    <td className="px-5 py-3.5"><Skeleton width={20} height={14} /></td>
+                                                    <td className="px-5 py-3.5"><Skeleton width={160} height={14} /></td>
+                                                    <td className="px-5 py-3.5"><Skeleton width={260} height={14} /></td>
+                                                    <td className="px-5 py-3.5 text-right"><Skeleton width={64} height={28} /></td>
+                                                </tr>
+                                            ))
+                                        ) : currentLabSections.length > 0 ? (
+                                            currentLabSections.map((section, idx) => (
+                                                <tr key={section.id} className="hover:bg-teal-50/40 dark:hover:bg-teal-900/10 transition-colors">
+                                                    <td className="px-5 py-3.5 text-xs text-gray-400 dark:text-gray-500 font-mono">
+                                                        {indexOfFirstCategory + idx + 1}
+                                                    </td>
+                                                    <td className="px-5 py-3.5">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+                                                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                                {section.lab_section_name}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-5 py-3.5">
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
+                                                            {section.description || <span className="italic text-gray-400 dark:text-gray-500">No description</span>}
+                                                        </p>
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-right">
+                                                        <button
+                                                            onClick={() => openEditModal(section)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-700 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-800/40 transition-colors"
+                                                        >
+                                                            <Edit className="w-3.5 h-3.5" />
+                                                            Edit
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={4} className="px-5 py-14 text-center">
+                                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
+                                                        <Grid3X3 className="w-6 h-6 text-gray-400 dark:text-gray-500" />
+                                                    </div>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">No lab sections found</p>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </SkeletonTheme>
 
-                    {/* Pagination controls */}
-                    {totalPages > 1 && (
-                        <div className="flex justify-center items-center gap-4 mt-8">
-                            <button
-                                onClick={prevPage}
-                                disabled={currentPage === 1}
-                                className={`px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 ${currentPage === 1
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : "hover:bg-gray-200 dark:hover:bg-gray-700"
-                                    }`}
-                            >
-                                Previous
-                            </button>
-
-                            <span className="text-gray-700 dark:text-gray-300">
-                                Page {currentPage} of {totalPages}
-                            </span>
-
-                            <button
-                                onClick={nextPage}
-                                disabled={currentPage === totalPages}
-                                className={`px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 ${currentPage === totalPages
-                                    ? "opacity-50 cursor-not-allowed"
-                                    : "hover:bg-gray-200 dark:hover:bg-gray-700"
-                                    }`}
-                            >
-                                Next
-                            </button>
-                        </div>
-                    )}
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Page <span className="font-semibold text-gray-700 dark:text-gray-300">{currentPage}</span> of <span className="font-semibold text-gray-700 dark:text-gray-300">{totalPages}</span>
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={prevPage}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        ← Prev
+                                    </button>
+                                    <button
+                                        onClick={nextPage}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Modal */}
                 {isModalOpen && (
                     <>
-                        <div
-                            className="fixed inset-0 bg-gray-900 bg-opacity-50 dark:bg-opacity-70 z-40 transition-opacity"
-                            onClick={closeModal}
-                        ></div>
+                        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-40 backdrop-blur-sm" onClick={closeModal} />
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700">
 
-                        <div className="fixed top-0 right-0 left-0 z-50 flex justify-center items-center w-full h-full overflow-y-auto overflow-x-hidden">
-                            <div className="relative p-4 w-full max-w-lg max-h-full">
-                                <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                                        <h3 className="text-gray-900 dark:text-white text-lg font-semibold">
+                                {/* Modal Header */}
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center">
+                                            <Grid3X3 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                                        </div>
+                                        <h3 className="text-base font-semibold text-gray-900 dark:text-white">
                                             {modalMode === "add" ? "Add Lab Section" : "Edit Lab Section"}
                                         </h3>
+                                    </div>
+                                    <button
+                                        onClick={closeModal}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                {/* on submit, call the function that handles both editing and adding */}
+                                <form onSubmit={handleAddAndEditSubmitLabSections} className="p-6 space-y-4">
+                                    {["lab_section_name", "description"].map((field) => (
+                                        <div key={field}>
+                                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                                                {field === "lab_section_name" ? "Section Name" : "Description"}
+                                                {field === "lab_section_name" && <span className="text-red-500 ml-0.5">*</span>}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name={field}
+                                                value={formData[field]}
+                                                onChange={handleInputChange}
+                                                placeholder={field === "lab_section_name" ? "e.g. Haematology" : "Optional description"}
+                                                className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent placeholder-gray-400 dark:placeholder-gray-500"
+                                                required={field === "lab_section_name"}
+                                            />
+                                        </div>
+                                    ))}
+
+                                    <div className="flex justify-end gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                                         <button
+                                            type="button"
                                             onClick={closeModal}
-                                            className="text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
+                                            disabled={isAdding}
+                                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         >
-                                            ✕
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isAdding}
+                                            className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                                        >
+                                            {isAdding ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                                    </svg>
+                                                    Saving...
+                                                </>
+                                            ) : modalMode === "add" ? "Add Section" : "Save Changes"}
                                         </button>
                                     </div>
-
-                                    {/* on submit,call the function that handles both editing and adding of a supplier */}
-                                    <form onSubmit={handleAddAndEditSubmitLabSections} className="p-4 space-y-4">
-                                        {["lab_section_name", "description"].map((field) => (
-                                            <div key={field}>
-                                                <label className="block text-gray-700 dark:text-gray-300 mb-1 capitalize">
-                                                    {field.replace(/_/g, " ")}
-                                                </label>
-
-                                                <input
-                                                    type="text"
-                                                    name={field}
-                                                    value={formData[field]}
-                                                    onChange={handleInputChange}
-                                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    required={field === "lab_section_name"}
-                                                />
-                                            </div>
-                                        ))}
-
-
-                                        <div className="flex justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                                            <button
-                                                type="button"
-                                                onClick={closeModal}
-                                                disabled={isAdding} // prevent closing while submitting if you want
-                                                className="px-5 py-2.5 text-gray-900 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                disabled={isAdding}
-                                                className="px-5 py-2.5 text-white font-bold bg-gradient-to-r from-blue-700 to-purple-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                            >
-                                                {isAdding ? (
-                                                    <>
-                                                        <svg
-                                                            className="animate-spin h-5 w-5 text-white"
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                        >
-                                                            <circle
-                                                                className="opacity-25"
-                                                                cx="12"
-                                                                cy="12"
-                                                                r="10"
-                                                                stroke="currentColor"
-                                                                strokeWidth="4"
-                                                            ></circle>
-                                                            <path
-                                                                className="opacity-75"
-                                                                fill="currentColor"
-                                                                d="M4 12a8 8 0 018-8v8H4z"
-                                                            ></path>
-                                                        </svg>
-                                                        Saving...
-                                                    </>
-                                                ) : modalMode === "add" ? "Add Lab Section" : "Save Changes"}
-                                            </button>
-
-                                        </div>
-
-                                    </form>
-                                </div>
+                                </form>
                             </div>
                         </div>
                     </>

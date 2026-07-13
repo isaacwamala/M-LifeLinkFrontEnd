@@ -7,7 +7,7 @@ import axios from 'axios';
 import {
     X, Stethoscope, ClipboardList, FileText, Lightbulb,
     Activity, StickyNote, CheckCircle2, Loader2, ChevronDown, ChevronUp,
-    AlertCircle, FlaskConical, HeartPulse
+    AlertCircle, FlaskConical, HeartPulse, AlertTriangle, Info, CheckCircle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../general/constants';
@@ -102,6 +102,8 @@ const inputCls = "w-full rounded-xl px-4 py-2.5 bg-white dark:bg-gray-800 text-g
 // ══════════════════════════════════════════════════════════════════════════════
 export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess }) {
     const [submitting, setSubmitting] = useState(false);
+    const [consultationStatus, setConsultationStatus] = useState(null);
+    const [loadingConsultationStatus, setLoadingConsultationStatus] = useState(false);
 
     const emptyForm = {
         chief_complaint: '',
@@ -114,9 +116,27 @@ export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess 
 
     const [form, setForm] = useState(emptyForm);
 
-    // Reset form whenever drawer is opened for a new visit
+    // Reset form and fetch billing status whenever drawer is opened for a new visit
     useEffect(() => {
-        if (isOpen) setForm(emptyForm);
+        if (isOpen) {
+            setForm(emptyForm);
+            setConsultationStatus(null);
+
+            if (visit?.id) {
+                setLoadingConsultationStatus(true);
+                axios.get(`${API_BASE_URL}visitAssign/checkConsultationBillingStatus`, {
+                    params: { patient_visit_id: visit.id },
+                    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+                })
+                    .then(res => {
+                        if (res.data?.success) setConsultationStatus(res.data);
+                    })
+                    .catch(err => {
+                        console.error('Failed to fetch consultation billing status:', err);
+                    })
+                    .finally(() => setLoadingConsultationStatus(false));
+            }
+        }
     }, [isOpen, visit?.id]);
 
     const set = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -210,6 +230,55 @@ export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess 
                             All other fields are optional but recommended for a complete clinical record.
                         </p>
                     </div>
+
+                    {/* Consultation billing status banner */}
+                    {loadingConsultationStatus && (
+                        <div className="h-9 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    )}
+                    {!loadingConsultationStatus && consultationStatus && (() => {
+                        const { will_charge, reason, last_consultation_date, days_since_last, window_days } = consultationStatus;
+
+                        if (reason === 'ipd') {
+                            return (
+                                <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700">
+                                    <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                                        This is an IPD visit — no consultation fee applies. Inpatient charges are billed via the ward's daily rate instead.
+                                    </p>
+                                </div>
+                            );
+                        }
+
+                        if (!will_charge && reason === 'within_revisit_window') {
+                            return (
+                                <div className="flex items-start gap-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700">
+                                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-green-800 dark:text-green-200">
+                                        No consultation charge will be made — the last consultation was on <span className="font-semibold">{last_consultation_date}</span> ({days_since_last} days ago), within the {window_days}-day revisit window.
+                                    </p>
+                                </div>
+                            );
+                        }
+
+                        // will_charge === true cases
+                        let message;
+                        if (reason === 'no_window_configured') {
+                            message = 'A consultation invoice will be created when you save these notes (no revisit window is configured).';
+                        } else if (reason === 'no_prior_consultation') {
+                            message = 'A consultation invoice will be created — this patient has no prior confirmed consultation charge.';
+                        } else if (reason === 'revisit_window_expired') {
+                            message = `A consultation invoice will be created — the last consultation was on ${last_consultation_date} (${days_since_last} days ago), which exceeds the ${window_days}-day revisit window.`;
+                        } else {
+                            message = 'A consultation invoice will be created when you save these notes.';
+                        }
+
+                        return (
+                            <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-amber-800 dark:text-amber-200">{message}</p>
+                            </div>
+                        );
+                    })()}
 
                     {/* Chief Complaint */}
                     <Section icon={<HeartPulse className="w-4 h-4" />} title="Chief Complaint" accent="rose">

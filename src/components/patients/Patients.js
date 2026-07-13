@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
     ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, Plus, Edit2,
     HandCoins, X, User, Phone, ChevronRight, ChevronLeft,
-    UserPlus, UserCheck, ArrowRight, CheckCircle2, ExternalLink
+    UserPlus, UserCheck, ArrowRight, CheckCircle2, ExternalLink, ReceiptText
 } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
@@ -12,8 +12,14 @@ import { fetchPatientCategories, fetchDoctors, fetchRoomsWithAssignedDoctors, fe
 import { toast, ToastContainer } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
+
 // ── Shared visit wizard ───────────────────────────────────────────────────────
 import { CreateVisitWizard } from './CreateVisitWizard';
+
+// ── Patient deposit sub-components ───────────────────────────────────────────
+import { AddPatientDeposit } from './patients_sub_components/AddPatientDeposit';
+import { PatientDepositHistory } from './patients_sub_components/PatientDepositHistory';
+import { PatientFinancialStatementDrawer } from './patients_sub_components/PatientFinancialStatementDrawer';
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -170,8 +176,8 @@ export function Patients() {
     const [formData, setFormData] = useState({
         name: '', nin: '', dob: '', gender: '', patient_category_id: '', branch_id: '', admission_date: '',
         nationality: '', email: '', phone_number: '', occupation: '', marital_status: '',
-        insurance_number: '', insurance_provider: '', is_insured: '',
-        address: '', residence: '', subcounty: '', district: '',
+        insurance_number: '', insurance_provider: '', is_insured: '', area_of_workspace: '',
+        address: '', residence: '', subcounty: '', district: '', age: '',
         emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '',
         emergency_contact_address: '', status: '',
     });
@@ -189,6 +195,22 @@ export function Patients() {
 
     // ── Globa stats for patients ─────────────────────────────────────────────────────────
     const [stats, setStats] = useState({ total: 0, male: 0, female: 0, other: 0 });
+
+    // ── Deposit drawer state ───────────────────────────────────────────────────
+    const [isDepositOpen, setIsDepositOpen] = useState(false);
+    const [depositPatient, setDepositPatient] = useState(null);
+    const [isDepositHistoryOpen, setIsDepositHistoryOpen] = useState(false);
+    const [depositHistoryPatient, setDepositHistoryPatient] = useState(null);
+
+    // ── Financial statement drawer state ──────────────────────────────────────
+    const [isStatementOpen, setIsStatementOpen] = useState(false);
+    const [statementPatient, setStatementPatient] = useState(null);
+
+    // ── Account balance modal state ─────────────────────────────────────────────
+    // Shows the patient's deposit balance clearly on its own, instead of buried
+    // inside the Insurance & Admin card alongside six other fields.
+    const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+    const [balancePatient, setBalancePatient] = useState(null);
 
     // ── Data fetching ──────────────────────────────────────────────────────────
     const fetchAllPatients = async (page = 1, search = searchTerm) => {
@@ -258,8 +280,8 @@ export function Patients() {
                 marital_status: patient.marital_status || '', insurance_number: patient.insurance_number || '',
                 insurance_provider: patient.insurance_provider || '', is_insured: patient.is_insured ?? '',
                 address: patient.address || '', residence: patient.residence || '',
-                subcounty: patient.subcounty || '', district: patient.district || '',
-                emergency_contact_name: patient.emergency_contact_name || '',
+                subcounty: patient.subcounty || '', district: patient.district || '', area_of_workspace: patient.area_of_workspace || '',
+                emergency_contact_name: patient.emergency_contact_name || '', age: Number(patient.age) || '',
                 emergency_contact_phone: patient.emergency_contact_phone || '',
                 emergency_contact_relationship: patient.emergency_contact_relationship || '',
                 emergency_contact_address: patient.emergency_contact_address || '', status: patient.status || '',
@@ -269,8 +291,8 @@ export function Patients() {
             setFormData({
                 name: '', nin: '', dob: '', gender: '', patient_category_id: '', branch_id: '', admission_date: '',
                 nationality: '', email: '', phone_number: '', occupation: '', marital_status: '',
-                insurance_number: '', insurance_provider: '', is_insured: '',
-                address: '', residence: '', subcounty: '', district: '',
+                insurance_number: '', insurance_provider: '', is_insured: '', area_of_workspace: '',
+                address: '', residence: '', subcounty: '', district: '', age: '',
                 emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relationship: '',
                 emergency_contact_address: '', status: '',
             });
@@ -318,9 +340,30 @@ export function Patients() {
                 fetchAllPatients(1);
                 closeModal();
             }
+
         } catch (error) {
-            console.error(error);
-            toast.error(error.response?.data?.message || 'Something went wrong');
+            console.error('Submit error:', error);
+            const data = error.response?.data;
+
+            if (data?.errors && typeof data.errors === 'object') {
+                // Laravel validation — errors is a keyed object e.g. { age: ["must be integer"] }
+                Object.entries(data.errors).forEach(([field, msgs]) => {
+                    const label = field
+                        .replace(/\./g, ' › ')          // triage.chief_complaint → triage › chief_complaint
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, c => c.toUpperCase());
+                    const message = Array.isArray(msgs) ? msgs[0] : msgs;
+                    toast.error(`${label}: ${message}`, { autoClose: 6000 });
+                });
+
+            } else if (data?.error && typeof data.error === 'string') {
+                // Single string error e.g. { error: "The age field must be an integer." }
+                toast.error(data.error, { autoClose: 6000 });
+
+            } else {
+                // Generic fallback
+                toast.error(data?.message || 'Something went wrong', { autoClose: 5000 });
+            }
         } finally {
             setSubmitting(false);
         }
@@ -348,6 +391,12 @@ export function Patients() {
         s.has(id) ? s.delete(id) : s.add(id);
         setExpandedRows(s);
     };
+
+    const openDepositDrawer = (patient) => { setDepositPatient(patient); setIsDepositOpen(true); };
+    const openDepositHistoryDrawer = (patient) => { setDepositHistoryPatient(patient); setIsDepositHistoryOpen(true); };
+    const openBalanceModal = (patient) => { setBalancePatient(patient); setIsBalanceModalOpen(true); };
+    const openStatementDrawer = (patient) => { setStatementPatient(patient); setIsStatementOpen(true); };
+    const closeBalanceModal = () => { setIsBalanceModalOpen(false); setBalancePatient(null); };
 
     const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -398,6 +447,97 @@ export function Patients() {
                     navigate('/patient_visits');
                 }}
             />
+
+            {/* Deposit drawer */}
+            <AddPatientDeposit
+                isOpen={isDepositOpen}
+                onClose={() => { setIsDepositOpen(false); setDepositPatient(null); }}
+                patient={depositPatient}
+                token={token}
+                onSuccess={() => fetchAllPatients(currentPage)}
+            />
+
+            {/* Deposit history modal */}
+            {/* Deposit history modal */}
+            <PatientDepositHistory
+                isOpen={isDepositHistoryOpen}
+                onClose={() => { setIsDepositHistoryOpen(false); setDepositHistoryPatient(null); }}
+                patient={depositHistoryPatient}
+                token={token}
+            />
+
+            {/* Financial statement drawer */}
+            <PatientFinancialStatementDrawer
+                isOpen={isStatementOpen}
+                onClose={() => { setIsStatementOpen(false); setStatementPatient(null); }}
+                patient={statementPatient}
+                token={token}
+            />
+
+            {/* ══ ACCOUNT BALANCE MODAL ══ */}
+            {/* Standalone view of the patient's deposit balance — pulled from the
+            same patient object already in state, so no extra fetch is needed. */}
+            {isBalanceModalOpen && balancePatient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+
+                        {/* Header banner */}
+                        <div className="px-6 py-5 bg-gradient-to-r from-amber-500 to-orange-600 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-white">Account Balance</h2>
+                                <p className="text-amber-100 text-xs mt-0.5">{balancePatient.name}</p>
+                            </div>
+                            <button onClick={closeBalanceModal} className="p-2 rounded-xl hover:bg-white/20 text-white/80 hover:text-white transition">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Balance hero */}
+                        <div className="px-6 py-8 text-center">
+                            <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                                Current Deposit Balance
+                            </p>
+                            <p className="mt-2 text-4xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                                {Number(balancePatient.deposited_amount ?? 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })}
+                            </p>
+                        </div>
+
+                        {/* Quick reference details */}
+                        <div className="px-6 pb-5 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-4">
+                            {[
+                                { label: 'Patient No.', value: balancePatient.patient_number },
+                                { label: 'Branch', value: balancePatient.branch_name },
+                            ].map(({ label, value }) => (
+                                <div key={label} className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-400 dark:text-gray-500 font-medium">{label}</span>
+                                    <span className="text-gray-800 dark:text-gray-100 font-semibold">{value ?? '—'}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+                            <button
+                                onClick={() => { closeBalanceModal(); openDepositDrawer(balancePatient); }}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white
+                                    bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition shadow-md"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Add Deposit
+                            </button>
+                            <button
+                                onClick={closeBalanceModal}
+                                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300
+                                    bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ══ MAIN TABLE ══ */}
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-5">
@@ -555,7 +695,7 @@ export function Patients() {
                     <table className="w-full">
                         <thead className="bg-gray-50 dark:bg-gray-800 font-bold border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                {['Patient No', 'Name', 'Gender', 'Phone', 'Branch', 'Registered On', 'Actions', 'More'].map(h => (
+                                {['S/N', 'Patient No', 'Name', 'Gender', 'Phone', 'Branch', 'Registered On', 'Actions', 'More'].map(h => (
                                     <th key={h} className="px-6 py-3 text-left text-xs text-gray-500 font-bold dark:text-gray-400 uppercase tracking-wider">{h}</th>
                                 ))}
                             </tr>
@@ -563,19 +703,20 @@ export function Patients() {
                         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                             {loading ? (
                                 [1, 2, 3, 4, 5].map(i => (
-                                    <tr key={i}>{[...Array(8)].map((_, j) => <td key={j} className="px-6 py-4"><Skeleton /></td>)}</tr>
+                                    <tr key={i}>{[...Array(9)].map((_, j) => <td key={j} className="px-6 py-4"><Skeleton /></td>)}</tr>
                                 ))
                             ) : patients.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <td colSpan={9} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                         No patients found matching your criteria
                                     </td>
                                 </tr>
                             ) : (
-                                patients.map(patient => (
+                                patients.map((patient, index) => (
                                     <React.Fragment key={patient.patient_number}>
                                         <tr onClick={() => toggleRow(patient.patient_number)}
                                             className="hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer">
+                                            <td className="px-6 py-4 text-gray-900 dark:text-gray-200">{index + 1}</td>
                                             <td className="px-6 py-4 font-bold text-blue-600 dark:text-blue-400">{patient.patient_number}</td>
                                             <td className="px-6 py-4 text-gray-900 dark:text-gray-200">{patient.name}</td>
                                             <td className="px-6 py-4 text-gray-900 dark:text-gray-200 capitalize">{patient.gender}</td>
@@ -596,26 +737,189 @@ export function Patients() {
                                             </td>
                                         </tr>
 
+                                        {/* EXPANDED ROW WITH MORE PATIENT INFORMATION */}
                                         {expandedRows.has(patient.patient_number) && (
                                             <tr>
-                                                <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-gray-800">
-                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                                        <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                                            <h4 className="text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-                                                                <User className="w-4 h-4 text-blue-600" /> Personal Details
-                                                            </h4>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>DOB:</strong> {patient.dob ?? 'N/A'}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>Nationality:</strong> {patient.nationality ?? 'N/A'}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>Email:</strong> {patient.email ?? 'N/A'}</p>
+                                                <td colSpan={9} className="px-0 py-0 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+
+                                                    {/* Colored top accent bar */}
+                                                    <div className="h-0.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" />
+
+                                                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+
+                                                        {/* ── 1. Personal Details ── */}
+                                                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                            <div className="px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex items-center gap-2">
+                                                                <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                                                <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Personal</span>
+                                                            </div>
+                                                            <div className="p-3 space-y-2">
+                                                                {[
+                                                                    { label: 'Date of Birth', value: patient.dob ? formatDate(patient.dob) : null },
+                                                                    { label: 'Age', value: patient.age ? `${parseFloat(patient.age).toFixed(0)} yrs` : null },
+                                                                    { label: 'Nationality', value: patient.nationality },
+                                                                    { label: 'Marital Status', value: patient.marital_status },
+                                                                    { label: 'Occupation', value: patient.occupation },
+                                                                    { label: 'NIN', value: patient.nin },
+                                                                ].map(({ label, value }) => (
+                                                                    <div key={label} className="flex items-start justify-between gap-2">
+                                                                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                        <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                            {value ?? '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
-                                                        <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                                            <h4 className="text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
-                                                                <Phone className="w-4 h-4 text-blue-600" /> Emergency Contact
-                                                            </h4>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>Name:</strong> {patient.emergency_contact_name ?? 'N/A'}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>Phone:</strong> {patient.emergency_contact_phone ?? 'N/A'}</p>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-300"><strong>Relationship:</strong> {patient.emergency_contact_relationship ?? 'N/A'}</p>
+
+                                                        {/* ── 2. Contact & Location ── */}
+                                                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                            <div className="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800 flex items-center gap-2">
+                                                                <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">Contact & Location</span>
+                                                            </div>
+                                                            <div className="p-3 space-y-2">
+                                                                {[
+                                                                    { label: 'Email', value: patient.email },
+                                                                    { label: 'Phone', value: patient.phone_number },
+                                                                    { label: 'Address', value: patient.address },
+                                                                    { label: 'Area / Workspace', value: patient.area_of_workspace },
+                                                                    { label: 'Residence', value: patient.residence },
+                                                                    { label: 'Subcounty', value: patient.subcounty },
+                                                                    { label: 'District', value: patient.district },
+                                                                ].map(({ label, value }) => (
+                                                                    <div key={label} className="flex items-start justify-between gap-2">
+                                                                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                        <span className={`text-xs font-medium text-right truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                            {value ?? '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
+
+                                                        {/* ── 3. Insurance & Admin ── */}
+                                                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                            <div className="px-4 py-2.5 bg-violet-50 dark:bg-violet-900/20 border-b border-violet-100 dark:border-violet-800 flex items-center gap-2">
+                                                                <HandCoins className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                                                                <span className="text-xs font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wide">Insurance & Admin</span>
+                                                            </div>
+                                                            <div className="p-3 space-y-2">
+                                                                {[
+                                                                    {
+                                                                        label: 'Insured',
+                                                                        value: patient.is_insured != null
+                                                                            ? patient.is_insured ? 'Yes' : 'No'
+                                                                            : null,
+                                                                    },
+                                                                    { label: 'Insurance No.', value: patient.insurance_number },
+                                                                    { label: 'Provider', value: patient.insurance_provider },
+                                                                    { label: 'Admission Date', value: patient.admission_date ? formatDate(patient.admission_date) : null },
+                                                                    { label: 'Status', value: patient.status },
+                                                                    { label: 'Registered By', value: patient.created_by },
+                                                                    {
+                                                                        label: 'Deposit Balance',
+                                                                        value: Number(patient.deposited_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                                                                        highlight: 'deposit',
+                                                                    },
+                                                                ].map(({ label, value, highlight }) => (
+                                                                    <div key={label} className="flex items-start justify-between gap-2">
+                                                                        <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                        <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${highlight === 'deposit'
+                                                                            ? 'text-emerald-700 dark:text-emerald-300 font-bold'
+                                                                            : label === 'Status'
+                                                                                ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                                                                                : label === 'Insured' && value === 'Yes'
+                                                                                    ? 'text-blue-600 dark:text-blue-400'
+                                                                                    : value
+                                                                                        ? 'text-gray-700 dark:text-gray-200'
+                                                                                        : 'text-gray-300 dark:text-gray-600'
+                                                                            }`}>
+                                                                            {value ?? '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* ── 4. Emergency Contact ── */}
+                                                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                            <div className="px-4 py-2.5 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800 flex items-center gap-2">
+                                                                <Phone className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                                                <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wide">Emergency Contact</span>
+                                                            </div>
+
+                                                            {/* Show a "none recorded" state if all fields are null */}
+                                                            {!patient.emergency_contact_name && !patient.emergency_contact_phone ? (
+                                                                <div className="p-4 flex flex-col items-center justify-center text-center gap-1.5 h-[calc(100%-41px)]">
+                                                                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                                                        <Phone className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-400 dark:text-gray-500">No emergency contact recorded</p>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="p-3 space-y-2">
+                                                                    {/* Avatar + name hero */}
+                                                                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100 dark:border-gray-800 mb-1">
+                                                                        <div className="w-7 h-7 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center text-rose-600 dark:text-rose-400 text-xs font-bold flex-shrink-0">
+                                                                            {(patient.emergency_contact_name ?? '?').charAt(0).toUpperCase()}
+                                                                        </div>
+                                                                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+                                                                            {patient.emergency_contact_name ?? '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                    {[
+                                                                        { label: 'Phone', value: patient.emergency_contact_phone },
+                                                                        { label: 'Relationship', value: patient.emergency_contact_relationship },
+                                                                        { label: 'Address', value: patient.emergency_contact_address },
+                                                                    ].map(({ label, value }) => (
+                                                                        <div key={label} className="flex items-start justify-between gap-2">
+                                                                            <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                            <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                {value ?? '—'}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                    </div>
+
+                                                    {/* ── Deposit action buttons ── */}
+                                                    <div className="px-5 pb-4 flex flex-wrap gap-2">
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); openBalanceModal(patient); }}
+                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
+                                                                bg-gradient-to-r from-amber-500 to-orange-600
+                                                                hover:from-amber-600 hover:to-orange-700 transition shadow-sm"
+                                                        >
+                                                            <HandCoins className="w-3.5 h-3.5" /> View Balance
+                                                        </button>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); openDepositDrawer(patient); }}
+                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
+                                                                bg-gradient-to-r from-emerald-600 to-teal-600
+                                                                hover:from-emerald-700 hover:to-teal-700 transition shadow-sm"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" /> Add Deposit
+                                                        </button>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); openDepositHistoryDrawer(patient); }}
+                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
+                                                                bg-gradient-to-r from-violet-600 to-indigo-600
+                                                                hover:from-violet-700 hover:to-indigo-700 transition shadow-sm"
+                                                        >
+                                                            <ChevronRight className="w-3.5 h-3.5" /> Deposit History
+                                                        </button>
+                                                        <button
+                                                            onClick={e => { e.stopPropagation(); openStatementDrawer(patient); }}
+                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
+                                                                bg-gradient-to-r from-blue-600 to-cyan-600
+                                                                hover:from-blue-700 hover:to-cyan-700 transition shadow-sm"
+                                                        >
+                                                            <ReceiptText className="w-3.5 h-3.5" /> Financial Statement
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -688,6 +992,35 @@ export function Patients() {
                                             onChange={e => setFormData({ ...formData, dob: e.target.value })}
                                             className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
                                     </div>
+
+                                    <div>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Age</label>
+                                        <input type="number" value={formData.age}
+                                            onChange={e => setFormData({ ...formData, age: e.target.value })}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Area of workspace</label>
+                                        <input type="text" required value={formData.area_of_workspace}
+                                            onChange={e => setFormData({ ...formData, area_of_workspace: e.target.value })}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Nationality</label>
+                                        <input type="text" required value={formData.nationality}
+                                            onChange={e => setFormData({ ...formData, nationality: e.target.value })}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Physical Address</label>
+                                        <input type="text" required value={formData.address}
+                                            onChange={e => setFormData({ ...formData, address: e.target.value })}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500" />
+                                    </div>
+
                                     <div>
                                         <label className="block text-gray-700 dark:text-gray-300 mb-2">Gender</label>
                                         <select value={formData.gender} onChange={e => setFormData({ ...formData, gender: e.target.value })}
@@ -698,6 +1031,7 @@ export function Patients() {
                                             <option value="other">Other</option>
                                         </select>
                                     </div>
+
                                 </div>
                             </section>
 

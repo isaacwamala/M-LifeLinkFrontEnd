@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Eye, Search, Calendar, X, Edit, Plus, Trash2, AlertCircle, ChevronLeft, ShoppingCart, ChevronRight } from 'lucide-react';
-import { fetchProductsItems } from '../products/products_helper';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, Search, X, Edit, AlertCircle, ChevronLeft, ShoppingCart, ChevronRight, Package, BarChart2, Clock, Printer } from 'lucide-react';
+import AsyncSelect from 'react-select/async';
+import { fetchProductsForAsyncSelect } from '../products/products_helper';
 import { fetchUoms } from '../products/products_helper';
 import { fetchSuppliers } from '../products/products_helper';
+import { getSelectClassNames } from '../general/searchSelectStyles';
 import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
@@ -19,7 +21,10 @@ export default function MedicalStock() {
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [editFormData, setEditFormData] = useState(null);
-    const [products, setProducts] = useState([]);
+    const [selectedProductEditOption, setSelectedProductEditOption] = useState(null);
+    const productDebounceRef = useRef(null);
+    const searchDebounceRef = useRef(null);
+    const isFirstRender = useRef(true);
     const [suppliers, setSuppliers] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
@@ -27,50 +32,36 @@ export default function MedicalStock() {
     const [uoms, setUoms] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showModal, setShowModal] = useState(false);
-    //New state that pbserves aproduct  missing aconversion set
     const [conversionMissing, setConversionMissing] = useState(false);
+    const [stats, setStats] = useState(null);
 
-    //Set current page due to paginations from back end
+    const [isPrintBatchModalOpen, setIsPrintBatchModalOpen] = useState(false);
+    const [printBatchQuantity, setPrintBatchQuantity] = useState(30);
+
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
 
-    const now = new Date();
-    // Ensure we show data for this month of the current year, as back end returns them by default
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-        .toISOString()
-        .split('T')[0]; // YYYY-MM-DD
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-        .toISOString()
-        .split('T')[0];
-
-    const [dateFrom, setDateFrom] = useState(startOfMonth);
-    const [dateTo, setDateTo] = useState(endOfMonth);
-
-
-    //Fetch all purchase orders for the current month, current year from back end
-    const fetchAllMedicalStockItems = async (page = 1) => {
+    const fetchAllMedicalStockItems = async (page = 1, search = searchTerm) => {
         try {
+            const params = { page };
+            if (search) params.search = search;
+
             const response = await axios.get(`${API_BASE_URL}items/getAllProductBatches`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     Accept: "application/json",
                 },
-                params: {
-                    from_date: dateFrom,
-                    to_date: dateTo,
-                    page: page
-                },
+                params,
             });
             const data = response.data.batches;
-
-            // toast.success(response.data.message);
             setMedicalStockItems(data.data);
             setTotalPages(data.last_page);
             setCurrentPage(data.current_page);
-            console.log("medicalStockItems:", response.data.orders);
-
+            if (response.data.stats) {
+                setStats(response.data.stats);
+            }
         } catch (error) {
-            console.error("Error fetching  stock:", error);
+            console.error("Error fetching stock:", error);
         } finally {
             setLoading(false);
         }
@@ -109,48 +100,34 @@ export default function MedicalStock() {
         const data = await fetchSuppliers(token);
         setSuppliers(data);
     };
-    //fetch products
-    const loadProducts = async () => {
-        const data = await fetchProductsItems(token);
-        setProducts(data);
-    };
+
+    const loadProductOptions = (inputValue) =>
+        new Promise((resolve) => {
+            if (productDebounceRef.current) clearTimeout(productDebounceRef.current);
+            productDebounceRef.current = setTimeout(() => {
+                fetchProductsForAsyncSelect(token, inputValue).then(resolve);
+            }, 350);
+        });
 
     useEffect(() => {
-        loadProducts();
         loadUoms();
         loadSuppliers();
         fetchProductsWithTheirUomConversions();
     }, [token]);
 
+    // Initial load + debounced server-side search on subsequent changes
     useEffect(() => {
-        fetchAllMedicalStockItems(1);
-    }, [token, dateFrom, dateTo]);
-
-    // Handle resetting to default
-    const handleResetFilters = () => {
-        setDateFrom(startOfMonth);
-        setDateTo(endOfMonth);
-        fetchAllMedicalStockItems(1);// reload default data from backend
-    };
-
-    //const filteredOrders
-    const filteredStockItems = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-
-        return stockItems.filter(stock => {
-            const matchesSearch =
-                stock.batch_number.toLowerCase().includes(term) ||
-                stock.product.name.toLowerCase().includes(term);
-
-            // Convert created_at to YYYY-MM-DD string (local)
-            const createdDateStr = new Date(stock.created_at).toLocaleDateString('en-CA');
-
-            const matchesDateFrom = !dateFrom || createdDateStr >= dateFrom;
-            const matchesDateTo = !dateTo || createdDateStr <= dateTo;
-
-            return matchesSearch && matchesDateFrom && matchesDateTo;
-        });
-    }, [stockItems, searchTerm, dateFrom, dateTo]);
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            fetchAllMedicalStockItems(1, searchTerm);
+            return;
+        }
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = setTimeout(() => {
+            fetchAllMedicalStockItems(1, searchTerm);
+        }, 400);
+        return () => clearTimeout(searchDebounceRef.current);
+    }, [searchTerm]);
 
 
 
@@ -162,7 +139,7 @@ export default function MedicalStock() {
     // Function to handle the opening of the modal with prefilled data
     const handleUpdateBatch = (stock) => {
         setSelectedBatch(stock);
-        //Prefill data on opening the modal, we match id's to 
+        //Prefill data on opening the modal, we match id's to
         // to api that returns batches each with its respective data passing stock
         // which is part of the state object
         setEditFormData({
@@ -175,17 +152,19 @@ export default function MedicalStock() {
             batch_number: stock.batch_number,
             purchased_date: stock.purchased_date,
             expiry_date: stock.expiry_date,
-            supplier_id: stock.supplier.id,
+            supplier_id: stock.supplier?.id ?? null,
+            manufacturer: stock.manufacturer ?? '',
         });
+        setSelectedProductEditOption(stock.product_id ? {
+            value: stock.product_id,
+            label: stock.product?.name || String(stock.product_id),
+            raw: stock.product || {}
+        } : null);
         setIsUpdateModalOpen(true);
     };
 
     const selectedUOM = editFormData
         ? uoms.find(uom => uom.id.toString() === editFormData.entered_uom_id)
-        : null;
-
-    const selectedProduct = editFormData
-        ? products.find(p => p.id.toString() === editFormData.product_id)
         : null;
 
     const productWithConversion = editFormData
@@ -228,9 +207,8 @@ export default function MedicalStock() {
         );
 
         if (!hasConversion) {
-            // Get the product name
-            const productName =
-                products.find(p => p.id === Number(updated.product_id))?.name || "";
+            // Get the product name from the selected option
+            const productName = selectedProductEditOption?.raw?.name || selectedProductEditOption?.label || "";
 
             // Get the UOM name
             const uomName =
@@ -247,7 +225,45 @@ export default function MedicalStock() {
     };
 
 
-    // Update the Purchase Order 
+    const closeViewModal = () => {
+        setIsViewModalOpen(false);
+        setIsPrintBatchModalOpen(false);
+        setPrintBatchQuantity(30);
+    };
+
+    const handlePrintBatchLabels = () => {
+        const label = selectedBatch?.internal_batch_number;
+        if (!label || !printBatchQuantity || printBatchQuantity < 1) return;
+
+        const items = Array.from({ length: printBatchQuantity }, () => `
+            <div style="display:flex;align-items:center;justify-content:center;
+                        padding:12px 8px;border:1px solid #d1d5db;border-radius:4px;
+                        background:#fff;page-break-inside:avoid;min-height:64px;">
+                <span style="font-family:Courier,monospace,sans-serif;font-size:16px;
+                             font-weight:700;color:#111827;letter-spacing:0.05em;
+                             text-align:center;word-break:break-all;">
+                    ${label}
+                </span>
+            </div>`).join('');
+
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>Batch Labels</title>
+            <style>
+                body { margin: 0; padding: 8px; }
+                .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+                @media print { @page { margin: 10mm; } }
+            </style></head><body>
+            <div class="grid">${items}</div>
+            </body></html>`);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 200);
+    };
+
+    // Update the Purchase Order
     const handleSubmitUpdate = async () => {
         if (conversionMissing) {
             toast.error("Conversion missing — cannot update order.");
@@ -290,7 +306,7 @@ export default function MedicalStock() {
             toast.success(response.data.message);
             setIsUpdateModalOpen(false);
 
-            fetchAllMedicalStockItems()//refresh list
+            fetchAllMedicalStockItems(currentPage, searchTerm); // refresh list
 
         } catch (error) {
             console.error("Update error:", error);
@@ -320,68 +336,53 @@ export default function MedicalStock() {
                                 </h1>
                             </div>
                             <p className="text-gray-600 dark:text-gray-300 text-sm md:text-base">
-                                Stock displayed is for the current month ({new Date().toLocaleString('default', { month: 'long' })}) of {new Date().getFullYear()}. Adjust the filters above to view stock purchased from suppliers in other periods.
+                                All registered stock batches across all branches. Use the search to filter by product name.
                             </p>
                         </div>
 
                     </div>
 
+                    {/* Stats Cards */}
+                    {stats && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 flex items-center gap-4">
+                                <Package className="w-10 h-10 text-blue-500 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Batches</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total_batches}</p>
+                                </div>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 flex items-center gap-4">
+                                <BarChart2 className="w-10 h-10 text-green-500 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Units (Base UOM)</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{Number(stats.total_units_in_base_uom).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 flex items-center gap-4">
+                                <Clock className="w-10 h-10 text-amber-500 flex-shrink-0" />
+                                <div>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Batches with Expiry</p>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total_marked_expiry}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
-                    {/* Filters Section */}
+                    {/* Search */}
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-
-                            {/* Search */}
-                            <div className="relative w-full">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    placeholder="Search by product or supplier..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 
-                    bg-white dark:bg-gray-900 
-                    text-gray-900 dark:text-white 
+                        <div className="relative w-full max-w-md">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Search by product name..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700
+                    bg-white dark:bg-gray-900
+                    text-gray-900 dark:text-white
                     rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                                />
-                            </div>
-
-                            {/* Date From */}
-                            <div className="relative w-full">
-                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-                                <input
-                                    type="date"
-                                    value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 
-                    bg-white dark:bg-gray-900 
-                    text-gray-900 dark:text-white 
-                    rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                                />
-                            </div>
-
-                            {/* Date To */}
-                            <div className="relative w-full">
-                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5" />
-                                <input
-                                    type="date"
-                                    value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 
-                    bg-white dark:bg-gray-900 
-                    text-gray-900 dark:text-white 
-                    rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                                />
-                            </div>
-
-                            {/* Reset Button */}
-                            <button
-                                onClick={handleResetFilters}
-                                className="w-full sm:w-auto flex justify-center items-center gap-2 px-5 py-2 bg-gray-600 dark:bg-gray-500 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-400 transition-colors font-medium shadow-md"
-                            >
-                                Reset
-                            </button>
-
+                            />
                         </div>
                     </div>
 
@@ -396,9 +397,8 @@ export default function MedicalStock() {
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Item</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Supplier</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Purchase Date</th>
-                                        <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">UOM entered</th>
-                                        <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Entered UOM QTY</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Actual QTY(BaseUnits)</th>
+                                        <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Base UOM</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Expiry date</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">Manufacturer</th>
                                         <th className="px-6 py-3 text-left text-gray-700 dark:text-gray-300">
@@ -425,32 +425,44 @@ export default function MedicalStock() {
                                                     <td className="px-6 py-4"><Skeleton /></td>
                                                     <td className="px-6 py-4"><Skeleton /></td>
                                                     <td className="px-6 py-4"><Skeleton /></td>
-                                                    <td className="px-6 py-4"><Skeleton /></td>
                                                 </tr>
                                             ))}
                                         </>
                                     )}
 
                                     {/* Show real data when loaded */}
-                                    {!loading && filteredStockItems.length > 0 && filteredStockItems.map((stock) => (
-                                        <tr key={stock.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                            <td className="px-6 py-4 text-red-700 font-bold dark:text-white">{stock.batch_number}</td>
+                                    {!loading && stockItems.length > 0 && stockItems.map((stock) => (
+                                        <tr key={stock.id} onClick={() => handleViewBatch(stock)}  className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" >
+                                            <td className="px-6 py-4 text-red-700 font-bold dark:text-white">
+                                                {stock.batch_number
+                                                    ? stock.batch_number
+                                                    : (
+                                                        <span className="flex items-center gap-1">
+                                                            <span>{stock.internal_batch_number}</span>
+                                                            <span className="text-xs font-normal px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded">auto</span>
+                                                        </span>
+                                                    )
+                                                }
+                                            </td>
                                             <td className="px-6 py-4 text-gray-700 font-bold dark:text-white">{stock.product?.name}</td>
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{stock.supplier?.name}</td>
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
                                                 {new Date(stock.purchased_date).toLocaleDateString()}
                                             </td>
-                                            <td className="px-6 py-4 text-red-700 font-bold dark:text-white">{stock.uom?.name}</td>
-                                            <td className="px-6 py-4 text-red-700 font-bold dark:text-white">{stock.quantity_for_uom_entered}</td>
                                             <td className="px-6 py-4">
                                                 <span className="inline-block px-3 py-1 text-sm font-semibold text-green-800 bg-green-100 dark:text-green-100 dark:bg-green-700 rounded-full">
                                                     {stock.quantity_in_base_uom}
                                                 </span>
                                             </td>
 
+                                            <td className="px-6 py-4">
+                                                <span className="inline-block px-3 py-1 text-sm font-semibold text-purple-800 bg-purple-100 dark:text-purple-100 dark:bg-purple-700 rounded-full">
+                                                    {stock.product_basic_uom_used}
+                                                </span>
+                                            </td>
 
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                                                {new Date(stock.expiry_date).toLocaleDateString()}
+                                                {stock.expiry_date ? new Date(stock.expiry_date).toLocaleDateString() : '—'}
                                             </td>
 
                                             <td className="px-6 py-4 text-red-700 font-bold dark:text-white">{stock.manufacturer}</td>
@@ -473,13 +485,13 @@ export default function MedicalStock() {
                                             <td className="px-6 py-4">
                                                 <div className="flex gap-2">
                                                     <button
-                                                        onClick={() => handleViewBatch(stock)}
+                                                        onClick={(e) => { e.stopPropagation(); handleViewBatch(stock); }}
                                                         className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg"
                                                     >
                                                         <Eye className="w-5 h-5" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleUpdateBatch(stock)}
+                                                        onClick={(e) => { e.stopPropagation(); handleUpdateBatch(stock); }}
                                                         className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/40 rounded-lg"
                                                     >
                                                         <Edit className="w-5 h-5" />
@@ -490,7 +502,7 @@ export default function MedicalStock() {
                                     ))}
 
                                     {/* Show "No records" message */}
-                                    {!loading && filteredStockItems.length === 0 && (
+                                    {!loading && stockItems.length === 0 && (
                                         <tr>
                                             <td colSpan="7" className="text-center py-6 text-gray-600 dark:text-gray-300">
                                                 No records found
@@ -507,13 +519,13 @@ export default function MedicalStock() {
                         <div className="px-4 sm:px-6 py-3 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
                             {/* Showing info */}
                             <div className="text-sm text-gray-500 dark:text-gray-300">
-                                Showing {filteredStockItems.length} of {totalPages} results
+                                Showing {stockItems.length} of {totalPages} pages
                             </div>
 
                             {/* Pagination controls */}
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => fetchAllMedicalStockItems(Math.max(1, currentPage - 1))}
+                                    onClick={() => fetchAllMedicalStockItems(Math.max(1, currentPage - 1), searchTerm)}
                                     disabled={currentPage === 1}
                                     className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
@@ -525,7 +537,7 @@ export default function MedicalStock() {
                                 </span>
 
                                 <button
-                                    onClick={() => fetchAllMedicalStockItems(Math.min(totalPages, currentPage + 1))}
+                                    onClick={() => fetchAllMedicalStockItems(Math.min(totalPages, currentPage + 1), searchTerm)}
                                     disabled={currentPage === totalPages}
                                     className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
@@ -547,10 +559,10 @@ export default function MedicalStock() {
                             {/* Modal Header */}
                             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
                                 <h2 className="text-gray-900 dark:text-white font-bold lg">
-                                    Batch Details - {selectedBatch.batch_number}
+                                    Batch Details — {selectedBatch.batch_number || selectedBatch.internal_batch_number}
                                 </h2>
                                 <button
-                                    onClick={() => setIsViewModalOpen(false)}
+                                    onClick={closeViewModal}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                                 >
                                     <X className="w-5 h-5 text-gray-900 dark:text-white" />
@@ -568,7 +580,22 @@ export default function MedicalStock() {
 
                                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 shadow flex flex-col gap-1">
                                             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Batch Number</span>
-                                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedBatch.batch_number}</h4>
+                                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                                {selectedBatch.batch_number || (
+                                                    <span className="flex items-center gap-1">
+                                                        {selectedBatch.internal_batch_number}
+                                                        <span className="text-xs font-normal px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 rounded">auto-generated</span>
+                                                    </span>
+                                                )}
+                                            </h4>
+                                            {!selectedBatch.batch_number && (
+                                                <button
+                                                    onClick={() => setIsPrintBatchModalOpen(true)}
+                                                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg self-start"
+                                                >
+                                                    <Printer className="w-4 h-4" /> Print Internal Batch Number
+                                                </button>
+                                            )}
                                         </div>
 
                                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 shadow flex flex-col gap-1">
@@ -586,7 +613,7 @@ export default function MedicalStock() {
                                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 shadow flex flex-col gap-1">
                                             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Expiry Date</span>
                                             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                {new Date(selectedBatch.expiry_date).toLocaleDateString()}
+                                                {selectedBatch.expiry_date ? new Date(selectedBatch.expiry_date).toLocaleDateString() : '—'}
                                             </h4>
                                         </div>
 
@@ -602,22 +629,6 @@ export default function MedicalStock() {
                                             </span>
                                         </div>
 
-                                        {selectedBatch.uom_conversion_used && (
-                                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 shadow flex flex-col gap-1 col-span-2">
-                                                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Conversion Used</span>
-                                                {(() => {
-                                                    const conversion = JSON.parse(selectedBatch.uom_conversion_used);
-                                                    return (
-                                                        <span className="inline-block px-3 py-1 text-sm font-semibold text-purple-800 bg-purple-100 dark:text-purple-100 dark:bg-purple-700 rounded-full">
-                                                            1 {conversion.uom_name} = {conversion.multiplier} unit{conversion.multiplier > 1 ? "s in product base UOM" : ""}
-                                                        </span>
-                                                    );
-                                                })()}
-
-                                            </div>
-
-                                        )}
-
                                         <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 shadow flex flex-col gap-1">
                                             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Product's Base UOM</span>
                                             <span className="inline-block px-3 py-1 text-sm font-semibold text-purple-800 bg-purple-100 dark:text-purple-100 dark:bg-purple-700 rounded-full">
@@ -632,7 +643,9 @@ export default function MedicalStock() {
                                             </p>
 
                                             <div className="flex flex-wrap gap-2">
-                                                {selectedBatch.product.variant_options.map(opt => (
+                                                {(selectedBatch.product.variant_options ?? []).length === 0 ? (
+                                                    <span className="text-sm text-gray-400 italic">None</span>
+                                                ) : (selectedBatch.product.variant_options ?? []).map(opt => (
                                                     <span
                                                         key={opt.id}
                                                         className="inline-block px-3 py-1 text-sm font-semibold text-blue-800 bg-blue-100 dark:text-blue-100 dark:bg-blue-700 rounded-full"
@@ -688,9 +701,7 @@ export default function MedicalStock() {
                                             <thead className="bg-gray-50 dark:bg-gray-700">
                                                 <tr>
                                                     <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Product</th>
-                                                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Entered UOM</th>
-                                                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Quantity (UOM)</th>
-                                                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Price</th>
+                                                    <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Unit Price</th>
                                                     <th className="px-4 py-3 text-left text-gray-700 dark:text-gray-300">Base Quantity</th>
                                                 </tr>
                                             </thead>
@@ -703,15 +714,7 @@ export default function MedicalStock() {
                                                     </td>
 
                                                     <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                                        {selectedBatch.uom?.name}
-                                                    </td>
-
-                                                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                                        {selectedBatch.quantity_for_uom_entered}
-                                                    </td>
-
-                                                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                                        {parseFloat(selectedBatch.supplier_price).toFixed(2)}/=
+                                                        {parseFloat(selectedBatch.discounted_selling_price).toFixed(2)}/=
                                                     </td>
 
                                                     <td className="px-4 py-3 text-gray-900 dark:text-white">
@@ -729,6 +732,82 @@ export default function MedicalStock() {
                     </div>
                 )}
 
+                {/* Print Internal Batch Number Modal */}
+                {isPrintBatchModalOpen && selectedBatch && (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[60]">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col">
+
+                            {/* Header */}
+                            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
+                                <h2 className="text-gray-900 dark:text-white font-bold">
+                                    Print Internal Batch Number Labels
+                                </h2>
+                                <button
+                                    onClick={() => { setIsPrintBatchModalOpen(false); setPrintBatchQuantity(30); }}
+                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                                >
+                                    <X className="w-5 h-5 text-gray-900 dark:text-white" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto flex-1">
+                                {/* Quantity input */}
+                                <div className="mb-5">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Number of labels to print
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={printBatchQuantity}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value, 10);
+                                            if (!isNaN(v) && v >= 1) setPrintBatchQuantity(v);
+                                            else if (e.target.value === '') setPrintBatchQuantity('');
+                                        }}
+                                        className="w-40 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+
+                                {/* Live preview */}
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                    Preview ({printBatchQuantity || 0} labels)
+                                </p>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-72 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-900">
+                                    {printBatchQuantity >= 1 && Array.from({ length: printBatchQuantity }).map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className="flex items-center justify-center p-3 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 min-h-[56px]"
+                                        >
+                                            <span className="font-mono font-bold text-sm text-gray-900 dark:text-white text-center break-all">
+                                                {selectedBatch.internal_batch_number}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                                <button
+                                    onClick={() => { setIsPrintBatchModalOpen(false); setPrintBatchQuantity(30); }}
+                                    className="px-5 py-2 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handlePrintBatchLabels}
+                                    disabled={!printBatchQuantity || printBatchQuantity < 1}
+                                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg"
+                                >
+                                    <Printer className="w-4 h-4" /> Print
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+
                 {/* UPDATE MODAL */}
                 {/* ================== UPDATE PRODUCT BATCH MODAL ================== */}
                 {isUpdateModalOpen && selectedBatch && editFormData && (
@@ -738,7 +817,7 @@ export default function MedicalStock() {
                             {/* Header */}
                             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                    Update Product Batch – {selectedBatch.batch_number}
+                                    Update Product Batch{selectedBatch.batch_number ? ` — ${selectedBatch.batch_number}` : ''}
                                 </h2>
 
                                 <button
@@ -792,25 +871,18 @@ export default function MedicalStock() {
                                 {/* Product */}
                                 <div>
                                     <label className="block text-gray-700 dark:text-gray-300 mb-2">Product</label>
-                                    <select
-                                        value={editFormData.product_id}
-                                        onChange={(e) =>
-                                            setEditFormData({ ...editFormData, product_id: parseInt(e.target.value) })
-                                        }
-                                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
-                                    >
-                                        {products.map((product) => {
-                                            const variantText = product.variant_options
-                                                ? product.variant_options.map(v => v.option_value).join(" / ")
-                                                : "";
-
-                                            return (
-                                                <option key={product.id} value={product.id}>
-                                                    {product.name}{variantText ? ` – ${variantText}` : ""}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
+                                    <AsyncSelect
+                                        loadOptions={loadProductOptions}
+                                        defaultOptions
+                                        value={selectedProductEditOption}
+                                        onChange={(option) => {
+                                            setSelectedProductEditOption(option);
+                                            setEditFormData({ ...editFormData, product_id: option ? option.value : '' });
+                                        }}
+                                        classNames={getSelectClassNames()}
+                                        isClearable
+                                        placeholder="Search product..."
+                                    />
                                 </div>
 
                                 {/* Supplier */}
@@ -900,18 +972,21 @@ export default function MedicalStock() {
                                     />
                                 </div>
 
-                                {/* Batch Number */}
-                                <div>
-                                    <label className="block text-gray-700 dark:text-gray-300 mb-2">Batch Number</label>
-                                    <input
-                                        type="text"
-                                        value={editFormData.batch_number}
-                                        onChange={(e) =>
-                                            setEditFormData({ ...editFormData, batch_number: e.target.value })
-                                        }
-                                        className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
-                                    />
-                                </div>
+                                {/* Batch Number — only shown when the batch has a manually entered number;
+                                    auto-generated batches (internal_batch_number only) hide this field entirely */}
+                                {selectedBatch.batch_number && (
+                                    <div>
+                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Batch Number</label>
+                                        <input
+                                            type="text"
+                                            value={editFormData.batch_number ?? ''}
+                                            onChange={(e) =>
+                                                setEditFormData({ ...editFormData, batch_number: e.target.value })
+                                            }
+                                            className="w-full px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
+                                        />
+                                    </div>
+                                )}
                                 {/* Manufacturer */}
                                 <div>
                                     <label className="block text-gray-700 dark:text-gray-300 mb-2">Manufacturer</label>

@@ -5,6 +5,7 @@ import { toast, ToastContainer } from "react-toastify";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { fetchUoms } from "../products/products_helper"; //import fetch uoms defined in uoms
+import { AddUnitOfMeasureDrawer } from "./AddUnitOfMeasureDrawer";
 
 function UnitOfMeasure() {
     const token = localStorage.getItem("access_token");
@@ -50,9 +51,12 @@ function UnitOfMeasure() {
     const prevPage = () =>
         setCurrentPage((p) => (p > 1 ? p - 1 : p));
 
-    // Modal states
+    // Add drawer state (replaces the old add modal)
+    const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
+
+    // Edit modal states (unchanged)
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState("add"); // add | edit
+    const [modalMode] = useState("edit"); // edit only — add is now handled by the drawer
     const [currentUom, setCurrentUom] = useState(null);
 
     const [formData, setFormData] = useState({
@@ -67,19 +71,8 @@ function UnitOfMeasure() {
         });
     };
 
-    // OPEN ADD
-    const openAddModal = () => {
-        setModalMode("add");
-        setFormData({
-            name: "",
-            uom_code: "",
-        });
-        setIsModalOpen(true);
-    };
-
     // OPEN EDIT
     const openEditModal = (uom) => {
-        setModalMode("edit");
         setCurrentUom(uom);
         setFormData({
             name: uom.name,
@@ -93,7 +86,7 @@ function UnitOfMeasure() {
         setCurrentUom(null);
     };
 
-    // ADD / EDIT
+    // EDIT submit
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSubmit = async (e) => {
@@ -104,41 +97,20 @@ function UnitOfMeasure() {
             return;
         }
 
+        if (!currentUom) return;
+
         setIsSaving(true);
-
         try {
-            if (modalMode === "add") {
-                await axios.post(
-                    `${API_BASE_URL}config/getUnitOfMeasure`,
-                    {
-                        name: formData.name,
-                        uom_code: formData.uom_code,
-                    },
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-                toast.success("Unit of Measure added");
-            } else if (modalMode === "edit" && currentUom) {
-                await axios.post(
-                    `${API_BASE_URL}config/updateUnitOfMeasure`,
-                    {
-                        id: currentUom.id,
-                        name: formData.name,
-                        uom_code: formData.uom_code,
-                    },
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-                toast.success("Unit of Measure updated");
-            }
+            await axios.post(
+                `${API_BASE_URL}config/updateUnitOfMeasure`,
+                { id: currentUom.id, name: formData.name, uom_code: formData.uom_code },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success("Unit of Measure updated");
 
-            fetchUoms();
+            // Refresh the list with the real data from the server
+            const updated = await fetchUoms(token);
+            setUoms(updated);
             closeModal();
         } catch (err) {
             console.error("Saving failed:", err);
@@ -146,6 +118,11 @@ function UnitOfMeasure() {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // Called by AddUnitOfMeasureDrawer after a successful create
+    const handleUomCreated = (newUom) => {
+        setUoms((prev) => [...prev, newUom]);
     };
 
     return (
@@ -161,8 +138,8 @@ function UnitOfMeasure() {
                         </h1>
 
                         <button
-                            onClick={openAddModal}
-                            className="px-5 py-2.5 text-white font-bold rounded 
+                            onClick={() => setIsAddDrawerOpen(true)}
+                            className="px-5 py-2.5 text-white font-bold rounded
                     bg-gradient-to-r from-blue-700 to-purple-900 hover:opacity-90 transition"
                         >
                             + Add UOM
@@ -275,7 +252,7 @@ function UnitOfMeasure() {
                     border-gray-300 dark:border-gray-600 p-4">
 
                                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                                    {modalMode === "add" ? "Add Unit Of Measure" : "Edit Unit Of Measure"}
+                                    Edit Unit Of Measure
                                 </h3>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -340,6 +317,14 @@ function UnitOfMeasure() {
                     </>
                 )}
             </div>
+
+            {/* Add UOM Drawer */}
+            <AddUnitOfMeasureDrawer
+                isOpen={isAddDrawerOpen}
+                onClose={() => setIsAddDrawerOpen(false)}
+                token={token}
+                onCreated={handleUomCreated}
+            />
         </>
 
     );

@@ -34,7 +34,7 @@ export function CreateLabTestRequest() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [testDate, setTestDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toLocaleDateString('en-CA')
   );
 
   // Fetch all specimens on mount

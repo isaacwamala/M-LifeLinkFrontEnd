@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, Search, Calendar, Trash2, Filter, RefreshCw, HandCoins, Package, User, Phone, MapPin, CreditCard, DollarSign, Hash, ChevronRight, ChevronLeft, ChartBarStackedIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Calendar, Trash2, Filter, RefreshCw, HandCoins, Package, User, Phone, MapPin, CreditCard, DollarSign, Hash, ChevronRight, ChevronLeft, ChartBarStackedIcon, Clock, FlaskConical, ClipboardList, Fingerprint, Building2, Barcode } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -38,11 +38,22 @@ export function PatientLabTestRequests() {
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
 
+    //State for the verify results confirmation modal
+    //We store the test to verify in state so the confirm button knows which test to act on
+    const [showVerifyModal, setShowVerifyModal] = useState(false);
+    const [testToVerify, setTestToVerify] = useState(null);
+
     //States for Enter Results Modal
     const [showEnterResultsModal, setShowEnterResultsModal] = useState(false);
     const [resultValues, setResultValues] = useState({});
     const [selectedInstrumentId, setSelectedInstrumentId] = useState(null);
     const [excludedParameterIds, setExcludedParameterIds] = useState(new Set());
+
+    //States for PDF Preview Modal (shared by both request form and result form)
+    const [showPdfPreviewModal, setShowPdfPreviewModal] = useState(false);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+    const [pdfPreviewTitle, setPdfPreviewTitle] = useState('');
+    const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
 
 
     //Set current page due to paginations from back end
@@ -154,12 +165,15 @@ export function PatientLabTestRequests() {
         }) || null;
     };
 
-    //Fetch All set or configured test type result parameters 
-    // for the selected test type and also filter them based on the patient's 
-    // demographics(age and gender) to get right reference range for the patient for the test type parameter
-    //By calling the helper getMatchingReferenceRange function
-    //These parameters will be loaded when user clicks enter results on the modal
-    const fetchParameters = async (testTypeId) => {
+    // NOTE: `patient` is now passed in explicitly rather than read from the
+    // `activeTest` state variable. Previously this read `activeTest?.patient`,
+    // but setActiveTest() doesn't apply synchronously — this function was
+    // invoked in the same tick as setActiveTest(test), so it was always closing
+    // over the PREVIOUS activeTest (usually null after closeEnterResultsModal
+    // resets it). That silently made getMatchingReferenceRange() return null
+    // for every numeric parameter regardless of how correct the reference
+    // ranges actually were, producing the "no parameters match" message.
+    const fetchParameters = async (testTypeId, patient) => {
         setLoading(true);
         try {
 
@@ -181,11 +195,37 @@ export function PatientLabTestRequests() {
             //Return test type parameters for the test type selected
             const testTypeParameters = response.data.test_type_parameters;
 
-            //Extract info from the response
+            /**
+             * Build the list of parameters to show in the Enter Results modal.
+             *
+             * - NUMERIC parameters need a reference range matched to the patient's
+             *   age/gender before we can display normal_min/max, si_unit, and
+             *   auto-interpretation (Low/Normal/High). If no matching range exists
+             *   for this patient's demographics, we exclude the parameter and ask
+             *   the user to configure a range that covers the patient (existing behavior).
+             *
+             * - TEXT / QUALITATIVE / SEMI_QUANTITATIVE parameters (e.g. HIV → Positive/Negative)
+             *   are never given reference ranges at configuration time, so there is
+             *   nothing to match against the patient. Previously these were run through
+             *   getMatchingReferenceRange() too, which always returned null and silently
+             *   dropped them from the modal — this is the bug. We now skip range-matching
+             *   for non-numeric result types and keep them as-is so a plain text input
+             *   renders for them.
+             */
             const parsedData = testTypeParameters
                 .map(param => {
-                    //Get the matching reference ranges and right parameters for the patient based on the patient's demographics and the reference ranges set for the parameter in the back end
-                    const matchedRange = getMatchingReferenceRange(param, activeTest?.patient);
+                    // Non-numeric: no reference range needed, keep parameter as-is
+                    if (param.result_type !== 'numeric') {
+                        return {
+                            ...param,
+                            normal_min: null,
+                            normal_max: null,
+                            reference_range: null,
+                        };
+                    }
+
+                    // Numeric: find the reference range matching this patient's age/gender
+                    const matchedRange = getMatchingReferenceRange(param, patient);
 
                     // ❗ If no matching range → exclude parameter
                     // where the patient gender and age dont fall in the ranges set age range or gender
@@ -207,7 +247,7 @@ export function PatientLabTestRequests() {
                         flag_high_label: matchedRange.flag_high_label || 'High',
                     };
                 })
-                .filter(Boolean); // removes nulls
+                .filter(Boolean); // removes nulls (numeric params with no matching range)
 
             //Set these parameters which reflect in state
             setParameters(parsedData);
@@ -304,6 +344,28 @@ export function PatientLabTestRequests() {
             return matchesSearch && matchesDateFrom && matchesDateTo && matchesTab;
         });
     }, [labTests, searchTerm, dateFrom, dateTo, activeTab]);
+
+    // Summary counts across the full fetched dataset (not filtered by tab/search)
+    const insights = useMemo(() => {
+        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+        return {
+            total: labTests.length,
+            // status ids 2 = SPECIMEN_COLLECTED, 3 = SPECIMEN_ACCEPTED
+            awaitingSpecimen: labTests.filter(t => t.test_status.id === 2 || t.test_status.id === 3).length,
+            // status id 5 = STARTED
+            inProgress: labTests.filter(t => t.test_status.id === 5).length,
+            // status ids 6 = COMPLETED, 7 = VERIFIED
+            awaitingSignoff: labTests.filter(t => t.test_status.id === 6 || t.test_status.id === 7).length,
+            // status id 8 = APPROVED
+            approved: labTests.filter(t => t.test_status.id === 8).length,
+            // PENDING (4) and created more than 2 hours ago
+            overdue: labTests.filter(t =>
+                t.test_status.id === 4 &&
+                t.test_info?.test_date &&
+                (Date.now() - new Date(t.test_info.test_date).getTime()) > TWO_HOURS_MS
+            ).length,
+        };
+    }, [labTests]);
 
 
     const toggleRow = (id) => {
@@ -488,6 +550,25 @@ export function PatientLabTestRequests() {
         }
     };
 
+    // Opens the confirm-verify modal for a given test instead of verifying immediately
+    const handleVerifyResultsClick = (test) => {
+        setTestToVerify(test);
+        setShowVerifyModal(true);
+    };
+
+    // Closes the confirm-verify modal without acting
+    const closeVerifyModal = () => {
+        setShowVerifyModal(false);
+        setTestToVerify(null);
+    };
+
+    // Runs when the user confirms inside the modal
+    const confirmVerifyResults = async () => {
+        if (!testToVerify) return;
+        await handleVerifyLabTestResults(testToVerify.id);
+        closeVerifyModal();
+    };
+
     //Function to approve lab test results
     const handleApproveTestResults = async (testId) => {
         if (!testId) return;
@@ -517,26 +598,33 @@ export function PatientLabTestRequests() {
         }
     };
 
-    // Fetch parameters for this test type
-    //Pas the id of the test type ie HIV,CBC and then display modal with the parameters
-    //returned by the function(fetchParameters)
-    useEffect(() => {
-        if (activeTest) {
-            fetchParameters(activeTest.test_info.id);
-            setShowEnterResultsModal(true);
-        }
-    }, [activeTest]);
-
-    // Handler for Enter Results button click
-    // We also fetch the result parameters for the test type, 
-    // when the add results button, is clicked,it calls this function 
-    // while passing the entire active test
+    // Handler for Enter Results button click.
+    // Fetches parameters and opens the modal directly (instead of relying on a
+    // useEffect keyed off `activeTest`). The old effect-based approach failed to
+    // reopen the modal when the same test was clicked twice in a row, because
+    // setActiveTest(test) with the same object reference doesn't trigger a
+    // dependency change, so the effect never re-ran.
     const handleEnterResultsClick = async (test) => {
         setActiveTest(test);
-        // console.log('Clicked test object:', test);
-        // console.log('Clicked test.patient:', test.patient);
         setExcludedParameterIds(new Set());
         setResultValues({});
+        setSelectedInstrumentId(null);
+        setParameters([]); // clear stale params from any previously viewed test
+        setShowEnterResultsModal(true); // open immediately so the skeleton shows while fetching
+        // Pass test.patient directly rather than relying on the activeTest state
+        // variable, since setActiveTest() above hasn't applied yet at this point.
+        await fetchParameters(test.test_info.id, test.patient);
+    };
+
+    // Central close/reset for the Enter Results modal. Clearing activeTest here
+    // (not just hiding the modal) is what guarantees the next click on the same
+    // test is treated as a fresh open.
+    const closeEnterResultsModal = () => {
+        setShowEnterResultsModal(false);
+        setActiveTest(null);
+        setParameters([]);
+        setResultValues({});
+        setExcludedParameterIds(new Set());
         setSelectedInstrumentId(null);
     };
 
@@ -638,9 +726,7 @@ export function PatientLabTestRequests() {
             );
 
             toast.success(response.data.message || "Results submitted successfully");
-            setShowEnterResultsModal(false);
-            setResultValues({});
-            setExcludedParameterIds(new Set());
+            closeEnterResultsModal();
             fetchPatientLabTestRequests(currentPage);
 
         } catch (error) {
@@ -664,16 +750,64 @@ export function PatientLabTestRequests() {
         REJECTED: 9,           //Status for Rejected Test
     };
 
-    // Tab configuration
+    // Tab configuration — fully-static class strings so Tailwind JIT never purges them
     const TABS = [
-        { id: TEST_STATUS.PENDING, label: 'Pending Tests', color: 'yellow' },
-        { id: TEST_STATUS.SPECIMEN_COLLECTED, label: 'Specimen Collected', color: 'blue' },
-        { id: TEST_STATUS.SPECIMEN_ACCEPTED, label: 'Specimen Accepted', color: 'indigo' },
-        { id: TEST_STATUS.STARTED, label: 'Started', color: 'orange' },
-        { id: TEST_STATUS.COMPLETED, label: 'Completed', color: 'purple' },
-        { id: TEST_STATUS.VERIFIED, label: 'Verified', color: 'teal' },
-        { id: TEST_STATUS.APPROVED, label: 'Approved', color: 'green' },
-        { id: TEST_STATUS.REJECTED, label: 'Rejected', color: 'red' },
+        {
+            id: TEST_STATUS.PENDING,
+            label: 'Pending Tests',
+            activeClass: 'bg-yellow-500 text-white shadow-md',
+            badgeActiveClass: 'bg-yellow-300 text-yellow-900',
+            badgeInactiveClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+        },
+        {
+            id: TEST_STATUS.SPECIMEN_COLLECTED,
+            label: 'Specimen Collected',
+            activeClass: 'bg-blue-600 text-white shadow-md',
+            badgeActiveClass: 'bg-blue-300 text-blue-900',
+            badgeInactiveClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+        },
+        {
+            id: TEST_STATUS.SPECIMEN_ACCEPTED,
+            label: 'Specimen Accepted',
+            activeClass: 'bg-indigo-600 text-white shadow-md',
+            badgeActiveClass: 'bg-indigo-300 text-indigo-900',
+            badgeInactiveClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+        },
+        {
+            id: TEST_STATUS.STARTED,
+            label: 'Started',
+            activeClass: 'bg-orange-500 text-white shadow-md',
+            badgeActiveClass: 'bg-orange-300 text-orange-900',
+            badgeInactiveClass: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+        },
+        {
+            id: TEST_STATUS.COMPLETED,
+            label: 'Completed',
+            activeClass: 'bg-purple-600 text-white shadow-md',
+            badgeActiveClass: 'bg-purple-300 text-purple-900',
+            badgeInactiveClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+        },
+        {
+            id: TEST_STATUS.VERIFIED,
+            label: 'Verified',
+            activeClass: 'bg-teal-600 text-white shadow-md',
+            badgeActiveClass: 'bg-teal-300 text-teal-900',
+            badgeInactiveClass: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+        },
+        {
+            id: TEST_STATUS.APPROVED,
+            label: 'Approved',
+            activeClass: 'bg-green-600 text-white shadow-md',
+            badgeActiveClass: 'bg-green-300 text-green-900',
+            badgeInactiveClass: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+        },
+        {
+            id: TEST_STATUS.REJECTED,
+            label: 'Rejected',
+            activeClass: 'bg-red-600 text-white shadow-md',
+            badgeActiveClass: 'bg-red-300 text-red-900',
+            badgeInactiveClass: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        },
     ];
 
     // Get count of tests for each status
@@ -681,89 +815,70 @@ export function PatientLabTestRequests() {
         return labTests.filter(test => test.test_status.id === statusId).length;
     };
 
-    //Handle the download of test request form
-    const handlePreviewLabTestRequestPdf = async (visitId) => {
+    // Resolve the correct badge color for a status by reusing the TABS config,
+    // instead of a hardcoded color. Falls back to a neutral gray if a status
+    // id somehow isn't in TABS.
+    const getStatusBadgeClasses = (statusId) => {
+        const tab = TABS.find(t => t.id === statusId);
+        return tab ? tab.badgeInactiveClass : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    };
+
+    //Close PDF preview modal and revoke blob URL to avoid memory leaks
+    const closePdfPreviewModal = () => {
+        setShowPdfPreviewModal(false);
+        setPdfPreviewLoading(false);
+        if (pdfPreviewUrl) {
+            URL.revokeObjectURL(pdfPreviewUrl);
+            setPdfPreviewUrl(null);
+        }
+        setPdfPreviewTitle('');
+    };
+
+    //Shared helper: fetch a PDF blob from an endpoint and open in the preview modal
+    const openPdfPreview = async (endpoint, visitId, title) => {
         if (!visitId) {
             toast.error("Visit ID not found");
             return;
         }
 
-        try {
-            setLoading(true);
+        // Open the modal immediately with a loading spinner
+        setPdfPreviewUrl(null);
+        setPdfPreviewTitle(title);
+        setPdfPreviewLoading(true);
+        setShowPdfPreviewModal(true);
 
+        try {
             const response = await axios.post(
-                `${API_BASE_URL}tests/generatePatientLabTestRequestForm`,
+                `${API_BASE_URL}${endpoint}`,
                 { visit_id: visitId },
                 {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { Authorization: `Bearer ${token}` },
                     responseType: "blob",
                 }
             );
 
-            // Create blob
             const file = new Blob([response.data], { type: "application/pdf" });
-
-            // Create blob URL
-            const fileURL = URL.createObjectURL(file);
-
-            // Preview PDF in new tab
-            window.open(fileURL, "_blank");
-
-            // Cleanup after some time
-            setTimeout(() => URL.revokeObjectURL(fileURL), 60000); // 1 minute
-
+            const url = URL.createObjectURL(file);
+            setPdfPreviewUrl(url);
         } catch (error) {
             console.error("Error generating PDF:", error);
-            toast.error("Failed to generate test request form");
+            toast.error("Failed to generate PDF");
+            closePdfPreviewModal();
         } finally {
-            setLoading(false);
+            setPdfPreviewLoading(false);
         }
+    };
+
+    //Handle the download of test request form
+    const handlePreviewLabTestRequestPdf = (visitId) => {
+        openPdfPreview('tests/generatePatientLabTestRequestForm', visitId, 'Test Request Form');
     };
 
     //Handle thefunction to download test result form
     //tests/generatePatientTestResultForm
-    const handleDownloadOfTestResultForm = async (visitId) => {
-        if (!visitId) {
-            toast.error("Visit ID not found");
-            return;
-        }
-
-        try {
-            setLoading(true);
-
-            const response = await axios.post(
-                `${API_BASE_URL}tests/generatePatientTestResultForm`,
-                { visit_id: visitId },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                    responseType: "blob",
-                }
-            );
-
-            // Create blob
-            const file = new Blob([response.data], { type: "application/pdf" });
-
-            // Create blob URL
-            const fileURL = URL.createObjectURL(file);
-
-            // Preview PDF in new tab
-            window.open(fileURL, "_blank");
-
-            // Cleanup after some time
-            setTimeout(() => URL.revokeObjectURL(fileURL), 60000); // 1 minute
-
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            toast.error("Failed to generate test result form");
-        } finally {
-            setLoading(false);
-        }
+    const handleDownloadOfTestResultForm = (visitId) => {
+        openPdfPreview('tests/generatePatientTestResultForm', visitId, 'Test Result Form');
     };
-
 
 
 
@@ -788,6 +903,53 @@ export function PatientLabTestRequests() {
                 {/* Header Row */}
 
 
+                {/* Insights Bar — numbers enlarged and given a colored accent bar
+                so counts are readable at a glance instead of blending into the card */}
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                        {/* Total — neutral */}
+                        <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gray-400 dark:bg-gray-500" />
+                            <p className="text-4xl font-extrabold leading-none text-gray-900 dark:text-white">{insights.total}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">Total Tests</p>
+                        </div>
+                        {/* Awaiting Specimen — indigo */}
+                        <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border border-indigo-200 dark:border-indigo-700 p-4 text-center">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-500" />
+                            <p className="text-4xl font-extrabold leading-none text-indigo-600 dark:text-indigo-400">{insights.awaitingSpecimen}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">Awaiting Specimen</p>
+                        </div>
+                        {/* In Progress — orange */}
+                        <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border border-orange-200 dark:border-orange-700 p-4 text-center">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-orange-500" />
+                            <p className="text-4xl font-extrabold leading-none text-orange-500 dark:text-orange-400">{insights.inProgress}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">In Progress</p>
+                        </div>
+                        {/* Awaiting Sign-off — purple */}
+                        <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border border-purple-200 dark:border-purple-700 p-4 text-center">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-purple-500" />
+                            <p className="text-4xl font-extrabold leading-none text-purple-600 dark:text-purple-400">{insights.awaitingSignoff}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">Awaiting Sign-off</p>
+                        </div>
+                        {/* Approved — green */}
+                        <div className="relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border border-green-200 dark:border-green-700 p-4 text-center">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-green-500" />
+                            <p className="text-4xl font-extrabold leading-none text-green-600 dark:text-green-400">{insights.approved}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">Approved</p>
+                        </div>
+                        {/* Overdue — red, stands out when count > 0 */}
+                        <div className={`relative overflow-hidden bg-white dark:bg-gray-900 rounded-lg border p-4 text-center ${insights.overdue > 0
+                            ? 'border-red-400 dark:border-red-500 ring-2 ring-red-400 dark:ring-red-500'
+                            : 'border-gray-200 dark:border-gray-700'
+                            }`}>
+                            <div className={`absolute top-0 left-0 right-0 h-1 ${insights.overdue > 0 ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`} />
+                            <p className={`text-4xl font-extrabold leading-none ${insights.overdue > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                {insights.overdue}
+                            </p>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mt-2">Overdue (&gt;2h Pending)</p>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Filters Section */}
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -848,8 +1010,8 @@ export function PatientLabTestRequests() {
 
                 </div>
 
-                {/* Tabs Section */}
-                <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                {/* Tabs Section — sticky so it stays visible while the table scrolls */}
+                <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                     <div className="px-6 overflow-x-auto">
                         <div className="flex gap-2 min-w-max py-3">
                             {TABS.map((tab) => {
@@ -860,36 +1022,18 @@ export function PatientLabTestRequests() {
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
-                                        className={`
-                                            px-4 py-2 rounded-lg transition-all duration-200
-                                            ${isActive
-                                                ? `bg-${tab.color}-600 text-white shadow-md`
-                                                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                                            }
-                                        `}
-                                        style={isActive ? {
-                                            backgroundColor: tab.color === 'blue' ? '#2563eb' :
-                                                tab.color === 'indigo' ? '#4f46e5' :
-                                                    tab.color === 'yellow' ? '#eab308' :
-                                                        tab.color === 'orange' ? '#f97316' :
-                                                            tab.color === 'purple' ? '#9333ea' :
-                                                                tab.color === 'teal' ? '#14b8a6' :
-                                                                    tab.color === 'green' ? '#16a34a' :
-                                                                        tab.color === 'red' ? '#dc2626' : '#6b7280'
-                                        } : {}}
+                                        className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${isActive
+                                            ? tab.activeClass
+                                            : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                                            }`}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium">{tab.label}</span>
-                                            <span className={`
-                                                px-2 py-0.5 rounded-full text-xs
-                                                ${isActive
-                                                    ? 'bg-white/20 text-white'
-                                                    : `bg-${tab.color}-100 text-${tab.color}-700 dark:bg-${tab.color}-900/30 dark:text-${tab.color}-300`
-                                                }
-                                            `}>
-                                                {count}
-                                            </span>
-                                        </div>
+                                        <span>{tab.label}</span>
+                                        {/* Count badge enlarged (was text-xs/min-w-[1.25rem]) so counts
+                                        are legible without squinting, especially double-digit values */}
+                                        <span className={`inline-flex items-center justify-center min-w-[1.75rem] h-6 px-2 rounded-full text-sm font-bold ${isActive ? tab.badgeActiveClass : tab.badgeInactiveClass
+                                            }`}>
+                                            {count}
+                                        </span>
                                     </button>
                                 );
                             })}
@@ -941,489 +1085,482 @@ export function PatientLabTestRequests() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredLabTests.map((test) => (
-                                    <React.Fragment key={test.id}>
-                                        {/* MAIN ROW */}
-                                        <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                                            <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">
-                                                #LT-{test.id}
-                                            </td>
+                                filteredLabTests.map((test) => {
+                                    // Small helpers scoped to this row — keeps the JSX below readable
+                                    const patientInitial = (test.patient?.name || '?').charAt(0).toUpperCase();
+                                    const isExpanded = expandedRows.has(test.id);
 
-                                            <td className="px-4 py-3">
-                                                <div className="font-medium text-gray-900 dark:text-gray-100">
-                                                    {test.patient?.name}
-                                                </div>
-                                            </td>
+                                    return (
+                                        <React.Fragment key={test.id}>
+                                            {/* MAIN ROW — entire row is clickable to expand/collapse */}
+                                            <tr
+                                                className={`hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer ${isExpanded ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}
+                                                onClick={() => toggleRow(test.id)}
+                                            >
+                                                <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                                                    #LT-{test.id}
+                                                </td>
 
-                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                                {test.patient?.patient_number}
-                                            </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-300 text-xs font-bold flex-shrink-0">
+                                                            {patientInitial}
+                                                        </div>
+                                                        <div className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[160px]">
+                                                            {test.patient?.name}
+                                                        </div>
+                                                    </div>
+                                                </td>
 
-                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                                {test.visit_details?.visit_number}
-                                            </td>
+                                                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                                    {test.patient?.patient_number}
+                                                </td>
 
-                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                                {test.visit_details?.visit_date}
-                                            </td>
+                                                <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                                    {test.visit_details?.visit_number}
+                                                </td>
 
-                                            <td className="px-4 py-3 font-semibold text-red-500 dark:text-red-100">
-                                                <strong>{test.test_info?.test_type}</strong>
-                                            </td>
+                                                <td className="px-4 py-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                                    {test.visit_details?.visit_date}
+                                                </td>
 
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex px-2 py-1 text-xs rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
-                                                    {test.specimen?.type}
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <FlaskConical className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                                                        <span className="font-semibold text-gray-800 dark:text-gray-100">
+                                                            {test.test_info?.test_type}
+                                                        </span>
+                                                    </div>
+                                                </td>
 
-                                                </span>
-                                            </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex px-2 py-1 text-xs rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                                                        {test.specimen?.type}
+                                                    </span>
+                                                </td>
 
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full
-                                    bg-yellow-100 text-yellow-800
-                                    dark:bg-yellow-900 dark:text-yellow-300">
-                                                    {test.test_status?.name}
-                                                </span>
-                                            </td>
+                                                <td className="px-4 py-3">
+                                                    {/* Status color now matches the tab config exactly (was previously
+                                                hardcoded to yellow regardless of actual status) */}
+                                                    <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full ${getStatusBadgeClasses(test.test_status?.id)}`}>
+                                                        {test.test_status?.name}
+                                                    </span>
+                                                </td>
 
-                                            <td className="px-4 py-3 text-right">
-                                                <button
-                                                    onClick={() => toggleRow(test.id)}
-                                                    className="inline-flex items-center  justify-center w-8 h-8 rounded-full
+                                                <td className="px-4 py-3 text-right">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleRow(test.id); }}
+                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-full
                                                hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-400"
-                                                >
-                                                    {expandedRows.has(test.id) ? (
-                                                        <ChevronUp className="w-4 h-4" />
-                                                    ) : (
-                                                        <ChevronDown className="w-4 h-4" />
-                                                    )}
-                                                </button>
-                                            </td>
-                                        </tr>
-
-                                        {/* EXPANDED ROW */}
-                                        {expandedRows.has(test.id) && (
-                                            <tr>
-                                                <td colSpan={10} className="bg-gray-50 dark:bg-gray-800 px-6 py-6">
-                                                    {/* ACTIONS SECTION */}
-                                                    <div className="mb-6">
-                                                        <h4 className="text-2xl text-center font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                            Laboratory Actions for this Test
-                                                        </h4>
-
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-
-                                                            {/* Function to collect specimen/sample while calling the function 
-                                                            WE ensure we pass the id of this test, its only we need */}
-                                                            {/* COLLECT SAMPLE — If Pending */}
-                                                            {test.test_status.id === TEST_STATUS.PENDING && (
-                                                                <button
-                                                                    onClick={() => handleCollectSample(test.id)}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-blue-100 text-blue-700
-                                                                dark:bg-blue-900/30 dark:text-blue-300
-                                                                hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
-                                                                >
-                                                                    Collect Sample
-                                                                </button>
-                                                            )}
-
-
-                                                            {/* Accept Specimen Button,when clicked it triggers the modal */}
-                                                            {/* ACCEPT SPECIMEN — if sample Collected */}
-                                                            {test.test_status.id === TEST_STATUS.SPECIMEN_COLLECTED && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setActiveTest(test);
-
-                                                                        setSelectedSpecimenId(null);
-                                                                        // Pass the id of this test type and pass it to the function that returns specimens for the test type
-                                                                        // its necessary when accepting sample/specimen for the test
-                                                                        fetchSpecimensForTestType(test.test_info.id);
-                                                                        setShowSpecimenModal(true);
-                                                                    }}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-indigo-100 text-indigo-700
-                                                                 dark:bg-indigo-900/30 dark:text-indigo-300
-                                                                 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition"
-                                                                >
-                                                                    Accept Specimen
-                                                                </button>
-                                                            )}
-
-                                                            {/* Button to reject the test, we ensure we save the test in state, 
-                                                              and we shall pass the id of the test in handleRejectTest function,
-                                                             together with the rejection reason */}
-
-                                                            {/* Show REJECT TEST — If Test is Pending,  Started, Completed  */}
-                                                            {[TEST_STATUS.PENDING, TEST_STATUS.STARTED, TEST_STATUS.COMPLETED].includes(test.test_status.id) && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setActiveTest(test); // save the current test in state
-                                                                        setRejectionReason(""); // reset any previous reason
-                                                                        setShowRejectModal(true); // open modal
-                                                                    }}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-red-100 text-red-700
-                                                                dark:bg-red-900/30 dark:text-red-300
-                                                                hover:bg-red-200 dark:hover:bg-red-900/50 transition"
-                                                                >
-                                                                    Reject Test
-                                                                </button>
-                                                            )}
-
-
-                                                            {/* Handle the start of the test, by passing the id of this test to the function
-                                                            that handles the start of the test */}
-                                                            {/* Show START TEST — If specimen Accepted */}
-                                                            {test.test_status.id === TEST_STATUS.SPECIMEN_ACCEPTED && (
-                                                                <button
-                                                                    onClick={() => handleTestStartOrAnalysis(test.id)}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                               bg-yellow-100 text-yellow-800
-                                                               dark:bg-yellow-900/30 dark:text-yellow-300
-                                                               hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition"
-                                                                >
-                                                                    Start / Analyze
-                                                                </button>
-                                                            )}
-
-                                                            {/* Handle the enter results button, which triggers the function that opens amodal */}
-
-                                                            {/* Show ADD / UPDATE RESULTS — If Test Is Started OR Completed */}
-                                                            {[TEST_STATUS.STARTED, TEST_STATUS.COMPLETED].includes(test.test_status.id) && (
-                                                                <button
-                                                                    onClick={() => handleEnterResultsClick(test)}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                              bg-purple-100 text-purple-700
-                                                              dark:bg-purple-900/30 dark:text-purple-300
-                                                              hover:bg-purple-200 dark:hover:bg-purple-900/50 transition">
-                                                                    Add/Update Results
-                                                                </button>
-                                                            )}
-
-                                                            {/* Verify test results button, we ensure that we pass the id of this test were on */}
-                                                            {/* Show VERIFY RESULTS — IF Test Completed */}
-                                                            {test.test_status.id === TEST_STATUS.COMPLETED && (
-                                                                <button
-                                                                    onClick={() => handleVerifyLabTestResults(test.id)}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                              bg-teal-100 text-teal-700
-                                                              dark:bg-teal-900/30 dark:text-teal-300
-                                                              hover:bg-teal-200 dark:hover:bg-teal-900/50 transition"
-                                                                >
-                                                                    Verify Results
-                                                                </button>
-                                                            )}
-
-                                                            {/* Function to approve test results, we pass the id of the test */}
-                                                            {/* Show APPROVE RESULTS — If Test Verified */}
-                                                            {test.test_status.id === TEST_STATUS.VERIFIED && (
-                                                                <button
-                                                                    onClick={() => handleApproveTestResults(test.id)}
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                               bg-green-100 text-green-700
-                                                               dark:bg-green-900/30 dark:text-green-300
-                                                                hover:bg-green-200 dark:hover:bg-green-900/50 transition">
-                                                                    Approve Results
-                                                                </button>
-                                                            )}
-
-                                                            {/* Handle the button that downloads the Lab test request form */}
-                                                            <button
-                                                                onClick={() =>
-                                                                    handlePreviewLabTestRequestPdf(test.visit_details?.id)
-                                                                }
-                                                                className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-sky-100 text-sky-700
-                                                                dark:bg-sky-900/30 dark:text-sky-300
-                                                                hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
-                                                            >
-                                                                View Test Request Form
-                                                            </button>
-
-
-
-                                                            {/* Show Test Result Form If the Test is Approved */}
-                                                            {test.test_status.id === TEST_STATUS.APPROVED && (
-                                                                <button
-                                                                    onClick={() =>
-                                                                        handleDownloadOfTestResultForm(test.visit_details?.id)
-                                                                    }
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-sky-100 text-sky-700
-                                                                dark:bg-sky-900/30 dark:text-sky-300
-                                                                hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
-                                                                >
-                                                                    View Test Result Form
-                                                                </button>
-                                                            )}
-
-                                                        </div>
-                                                    </div>
-
-                                                    {/* CARDS GRID */}
-                                                    <div className="">
-                                                        <h4 className="text-2xl text-center font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                            Patient Visit and Test Request Details
-                                                        </h4>
-
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-
-
-                                                            {/* PATIENT CARD */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Patient Details
-                                                                </h4>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Date of birth:</span> {test.patient?.dob || "N/A"}</p>
-                                                                    <p><span className="font-medium">Address:</span> {test.patient?.address || "N/A"}</p>
-                                                                    <p><span className="font-medium">Phone number:</span> {test.patient?.phone_number || "N/A"}</p>
-                                                                    <p>
-                                                                        <span className="font-medium">Insurance:</span>{" "}
-                                                                        {test.patient?.insurance_provider || "N/A"}
-                                                                    </p>
-                                                                   {/* Compute age from date of birth using day js */}
-                                                                    <p>
-                                                                        <span className="font-medium">Age:</span>{" "}
-                                                                        {test.patient?.dob
-                                                                            ? dayjs().diff(dayjs(test.patient.dob), "year")
-                                                                            : "N/A"}
-                                                                    </p>
-                                                                    <p>
-                                                                        <span className="font-medium">Insurance No.:</span>{" "}
-                                                                        {test.patient?.insurance_number || "N/A"}
-                                                                    </p>
-                                                                    <p><span className="font-medium">Gender:</span> {test.patient?.gender || "N/A"}</p>
-                                                                </div>
-
-
-                                                            </div>
-
-                                                            {/* Visit Details */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Visit Details Information
-                                                                </h4>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Visit Type:</span> {test.visit_details?.visit_type}</p>
-                                                                    <p><span className="font-bold">Visit Date:</span> {test.visit_details?.visit_date}</p>
-                                                                    <p><span className="font-bold">Visit Created By:</span> {test.visit_details?.created_by}</p>
-
-                                                                </div>
-                                                            </div>
-
-                                                            {/* SECIMEN AND AUDIT */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Specimen & Audit
-                                                                </h4>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p>
-                                                                        <span className="font-medium">Specimen Accepted:</span>{" "}
-                                                                        {test.specimen?.specimen_acceptance}
-                                                                    </p>
-
-                                                                    <p><span className="font-medium">Specimen collected By:</span> {test.specimen?.specimen_collected_by}</p>
-
-                                                                    <p><span className="font-medium">Specimen collected at:</span> {test.specimen?.specimen_collected_at}</p>
-                                                                    <p><span className="font-medium">Specimen Accepted By:</span> {test.specimen?.specimen_accepted_by}</p>
-                                                                    <p><span className="font-medium">Specimen Barcode:</span> {test.specimen?.specimen_barcode}</p>
-
-                                                                </div>
-                                                            </div>
-
-
-
-                                                            {/* TEST CARD */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Test Information
-                                                                </h4>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Test Type:</span> {test.test_info?.test_type}</p>
-                                                                    <p><span className="font-medium">Test Created By:</span> {test.audit?.created_by || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Who proven this test to be started:</span> {test.audit?.tested_by || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test rejected by:</span> {test.audit?.rejected_by || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test verified by:</span> {test.audit?.verified_by || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test Approved by:</span> {test.audit?.approved_by || 'N/A'}</p>
-
-                                                                    <p><span className="font-medium">Purpose:</span> {test.test_info?.test_purpose}</p>
-
-                                                                    <p><span className="font-medium">Method:</span> {test.test_info?.method_used || "N/A"}</p>
-                                                                    <p>
-                                                                        <span className="font-medium">Test Date:</span>{" "}
-                                                                        {formatDate(test.test_info?.test_date)}
-                                                                    </p>
-                                                                    <p><span className="font-medium">Test Rejection reason:</span> {test.test_info?.test_rejection_reason || 'N/A'}</p>
-
-
-                                                                </div>
-                                                            </div>
-
-                                                            {/* TEST TIMING */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    This Test Time stamps
-                                                                </h4>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Test created at:</span> {test.timestamps?.created || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test started at:</span> {test.timestamps?.started || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test Completed at:</span> {test.timestamps?.completed || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test Verified at:</span> {test.timestamps?.verified || 'N/A'}</p>
-
-                                                                    <p><span className="font-medium">Test rejected at:</span> {test.timestamps?.rejected || 'N/A'}</p>
-                                                                    <p><span className="font-medium">Test Approved at:</span> {test.timestamps?.approved || 'N/A'}</p>
-
-
-                                                                </div>
-                                                            </div>
-
-
-
-
-
-
-                                                        </div>
-
-                                                    </div>
-
-                                                    {/* MAP  TEST RESULTS FOR THIS TEST */}
-                                                    <div className="mt-8">
-                                                        <h1 className=" text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-4">
-                                                            Results For This Test
-                                                        </h1>
-
-                                                        {/* Map from test results from api */}
-                                                        {test.test_results && test.test_results.length > 0 ? (
-                                                            <div className="space-y-4">
-                                                                {test.test_results.map((result) => {
-                                                                    const parameter = result.snapshot?.parameter_used;
-                                                                    // Check if the result type for this test is numeric, 
-                                                                    // These tests use specific info which may not apply to tests which are text based
-                                                                    const isNumeric = parameter?.result_type === "numeric";
-
-                                                                    return (
-                                                                        <div
-                                                                            key={result.id}
-                                                                            className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5"
-                                                                        >
-                                                                            {/* HEADER */}
-                                                                            <div className="mb-3">
-                                                                                <h5 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                                                                    {parameter?.name || "Unknown Parameter"}
-                                                                                </h5>
-                                                                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                                    Result Type: {parameter?.result_type || "N/A"}
-                                                                                </p>
-                                                                            </div>
-
-                                                                            {/* RESULT VALUE */}
-                                                                            <div className="mb-4">
-                                                                                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                                                                                    Result Value
-                                                                                </p>
-                                                                                <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                                                                    {result.result_value}
-                                                                                </p>
-
-                                                                                <p
-                                                                                    className={`mt-1 text-xs font-medium ${result.interpretation === "High"
-                                                                                        ? "text-red-600 dark:text-red-400"
-                                                                                        : result.interpretation === "Low"
-                                                                                            ? "text-yellow-600 dark:text-yellow-400"
-                                                                                            : "text-green-600 dark:text-green-400"
-                                                                                        }`}
-                                                                                >
-                                                                                    Interpretation: {result.interpretation || "—"}
-                                                                                </p>
-                                                                            </div>
-
-                                                                            {/* NUMERIC DETAILS */}
-                                                                            <div className="mb-4">
-                                                                                <p className="text-xs font-bold text-gray-900 dark:text-gray-100 mb-1">
-                                                                                    Measurement Details used for this Parameter
-                                                                                </p>
-                                                                                {/* If the test is not applicable for numeric results like reference ranges etc  */}
-                                                                                {isNumeric ? (
-                                                                                    <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                                        <p>
-                                                                                            <span className="font-medium">SI Unit:</span>{" "}
-                                                                                            {parameter?.si_unit}
-                                                                                        </p>
-                                                                                        <p>
-                                                                                            <span className="font-medium">Reference Range:</span>{" "}
-                                                                                            {parameter?.reference_range}
-                                                                                        </p>
-                                                                                        <p>
-                                                                                            <span className="font-medium">Normal Min:</span>{" "}
-                                                                                            {parameter?.normal_min}
-                                                                                        </p>
-                                                                                        <p>
-                                                                                            <span className="font-medium">Normal Max:</span>{" "}
-                                                                                            {parameter?.normal_max}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                                                                                        Not applicable for non-numeric results
-                                                                                    </p>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {/* INSTRUMENT */}
-                                                                            <div className="mb-4 text-xs text-gray-600 dark:text-gray-400">
-                                                                                <span className="font-bold">Instrument Used:</span>{" "}
-                                                                                {result.test_instrument?.test_instrument_name || "N/A"}
-                                                                            </div>
-
-                                                                            {/* AUDIT */}
-                                                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                                <p className="text-xs font-bold text-gray-900 dark:text-gray-100 mb-1">
-                                                                                    Test Results Auditing
-                                                                                </p>
-                                                                                <p>
-                                                                                    <span className="font-medium">Results Entered By:</span>{" "}
-                                                                                    {result.test_result_entered_by?.name || "N/A"}
-                                                                                </p>
-                                                                                <p>
-                                                                                    <span className="font-medium">Results Verified By:</span>{" "}
-                                                                                    {result.test_result_verified_by?.name || "Not Verified"}
-                                                                                </p>
-                                                                                <p>
-                                                                                    <span className="font-medium">Time Entered:</span>{" "}
-                                                                                    {result.time_entered}
-                                                                                </p>
-
-                                                                                <p>
-                                                                                    <span className="font-medium">Time Verified:</span>{" "}
-                                                                                    {result.time_verified}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                    >
+                                                        {isExpanded ? (
+                                                            <ChevronUp className="w-4 h-4" />
                                                         ) : (
-                                                            <div className="text-1xl text-center font-bold text-red-500 dark:text-red-400">
-                                                                No test results recorded for this test.
-                                                            </div>
+                                                            <ChevronDown className="w-4 h-4" />
                                                         )}
-                                                    </div>
-
-
+                                                    </button>
                                                 </td>
                                             </tr>
-                                        )}
-                                    </React.Fragment>
-                                ))
+
+                                            {/* EXPANDED ROW */}
+                                            {isExpanded && (
+                                                <tr>
+                                                    <td colSpan={10} className="p-0 bg-gray-50 dark:bg-gray-800/60 border-b-2 border-blue-100 dark:border-blue-900/40">
+
+                                                        {/* Colored top accent, echoes the pattern used elsewhere in the app */}
+                                                        <div className="h-0.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+
+                                                        <div className="p-6">
+
+                                                            {/* ══ ACTIONS PANEL ══ */}
+                                                            <div className="mb-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                <div className="px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex items-center gap-2">
+                                                                    <ClipboardList className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                                                    <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                                                                        Laboratory Actions
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="p-4 flex flex-wrap gap-2">
+
+                                                                    {/* COLLECT SAMPLE — If Pending */}
+                                                                    {test.test_status.id === TEST_STATUS.PENDING && (
+                                                                        <button
+                                                                            onClick={() => handleCollectSample(test.id)}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                    bg-blue-100 text-blue-700
+                                                                    dark:bg-blue-900/30 dark:text-blue-300
+                                                                    hover:bg-blue-200 dark:hover:bg-blue-900/50 transition"
+                                                                        >
+                                                                            Collect Sample
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* ACCEPT SPECIMEN — if sample Collected */}
+                                                                    {test.test_status.id === TEST_STATUS.SPECIMEN_COLLECTED && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveTest(test);
+                                                                                setSelectedSpecimenId(null);
+                                                                                fetchSpecimensForTestType(test.test_info.id);
+                                                                                setShowSpecimenModal(true);
+                                                                            }}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                    bg-indigo-100 text-indigo-700
+                                                                     dark:bg-indigo-900/30 dark:text-indigo-300
+                                                                     hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition"
+                                                                        >
+                                                                            Accept Specimen
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* REJECT TEST — If Test is Pending, Started, Completed */}
+                                                                    {[TEST_STATUS.PENDING, TEST_STATUS.STARTED, TEST_STATUS.COMPLETED].includes(test.test_status.id) && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveTest(test);
+                                                                                setRejectionReason("");
+                                                                                setShowRejectModal(true);
+                                                                            }}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                    bg-red-100 text-red-700
+                                                                    dark:bg-red-900/30 dark:text-red-300
+                                                                    hover:bg-red-200 dark:hover:bg-red-900/50 transition"
+                                                                        >
+                                                                            Reject Test
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* START TEST — If specimen Accepted */}
+                                                                    {test.test_status.id === TEST_STATUS.SPECIMEN_ACCEPTED && (
+                                                                        <button
+                                                                            onClick={() => handleTestStartOrAnalysis(test.id)}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                   bg-yellow-100 text-yellow-800
+                                                                   dark:bg-yellow-900/30 dark:text-yellow-300
+                                                                   hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition"
+                                                                        >
+                                                                            Start / Analyze
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* ADD / UPDATE RESULTS — If Test Is Started OR Completed */}
+                                                                    {[TEST_STATUS.STARTED, TEST_STATUS.COMPLETED].includes(test.test_status.id) && (
+                                                                        <button
+                                                                            onClick={() => handleEnterResultsClick(test)}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                  bg-purple-100 text-purple-700
+                                                                  dark:bg-purple-900/30 dark:text-purple-300
+                                                                  hover:bg-purple-200 dark:hover:bg-purple-900/50 transition">
+                                                                            Add/Update Results
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* VERIFY RESULTS — IF Test Completed */}
+                                                                    {test.test_status.id === TEST_STATUS.COMPLETED && (
+                                                                        <button
+                                                                            onClick={() => handleVerifyResultsClick(test)}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                  bg-teal-100 text-teal-700
+                                                                  dark:bg-teal-900/30 dark:text-teal-300
+                                                                  hover:bg-teal-200 dark:hover:bg-teal-900/50 transition"
+                                                                        >
+                                                                            Verify Results
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* APPROVE RESULTS — If Test Verified */}
+                                                                    {test.test_status.id === TEST_STATUS.VERIFIED && (
+                                                                        <button
+                                                                            onClick={() => handleApproveTestResults(test.id)}
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                   bg-green-100 text-green-700
+                                                                   dark:bg-green-900/30 dark:text-green-300
+                                                                    hover:bg-green-200 dark:hover:bg-green-900/50 transition">
+                                                                            Approve Results
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* Divider between action buttons and document buttons */}
+                                                                    <div className="w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block" />
+
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handlePreviewLabTestRequestPdf(test.visit_details?.id)
+                                                                        }
+                                                                        className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                    bg-sky-100 text-sky-700
+                                                                    dark:bg-sky-900/30 dark:text-sky-300
+                                                                    hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
+                                                                    >
+                                                                        View Test Request Form
+                                                                    </button>
+
+                                                                    {/* Test Result Form — only if the test is Approved */}
+                                                                    {test.test_status.id === TEST_STATUS.APPROVED && (
+                                                                        <button
+                                                                            onClick={() =>
+                                                                                handleDownloadOfTestResultForm(test.visit_details?.id)
+                                                                            }
+                                                                            className="px-3 py-2 text-xs font-bold rounded-lg
+                                                                    bg-sky-100 text-sky-700
+                                                                    dark:bg-sky-900/30 dark:text-sky-300
+                                                                    hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
+                                                                        >
+                                                                            View Test Result Form
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* ══ DETAILS CARDS GRID ══ */}
+                                                            <h4 className="text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">
+                                                                Patient Visit &amp; Test Request Details
+                                                            </h4>
+
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+
+                                                                {/* ── PATIENT CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex items-center gap-2">
+                                                                        <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                                                                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Patient</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Date of Birth', value: test.patient?.dob },
+                                                                            { label: 'Age', value: test.patient?.dob ? `${dayjs().diff(dayjs(test.patient.dob), "year")} yrs` : null },
+                                                                            { label: 'Gender', value: test.patient?.gender },
+                                                                            { label: 'Address', value: test.patient?.address },
+                                                                            { label: 'Phone', value: test.patient?.phone_number },
+                                                                            { label: 'Insurance No.', value: test.patient?.insurance_number },
+                                                                            { label: 'Insurance Provider', value: test.patient?.insurance_provider },
+                                                                        ].map(({ label, value }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── VISIT CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800 flex items-center gap-2">
+                                                                        <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">Visit</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Visit Type', value: test.visit_details?.visit_type },
+                                                                            { label: 'Visit Date', value: test.visit_details?.visit_date },
+                                                                            { label: 'Created By', value: test.visit_details?.created_by },
+                                                                        ].map(({ label, value }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── SPECIMEN & AUDIT CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800 flex items-center gap-2">
+                                                                        <Package className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                                                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Specimen &amp; Audit</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Accepted?', value: test.specimen?.specimen_acceptance },
+                                                                            { label: 'Collected By', value: test.specimen?.specimen_collected_by },
+                                                                            { label: 'Collected At', value: test.specimen?.specimen_collected_at },
+                                                                            { label: 'Accepted By', value: test.specimen?.specimen_accepted_by },
+                                                                            { label: 'Barcode', value: test.specimen?.specimen_barcode, mono: true },
+                                                                        ].map(({ label, value, mono }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right truncate max-w-[55%] ${mono ? 'font-mono' : 'capitalize'} ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── TEST INFORMATION CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 border-b border-purple-100 dark:border-purple-800 flex items-center gap-2">
+                                                                        <FlaskConical className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                                                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">Test Information</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Test Type', value: test.test_info?.test_type },
+                                                                            { label: 'Purpose', value: test.test_info?.test_purpose },
+                                                                            { label: 'Method', value: test.test_info?.method_used },
+                                                                            { label: 'Test Date', value: test.test_info?.test_date ? formatDate(test.test_info.test_date) : null },
+                                                                            { label: 'Rejection Reason', value: test.test_info?.test_rejection_reason },
+                                                                        ].map(({ label, value }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── ACCOUNTABILITY CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-rose-50 dark:bg-rose-900/20 border-b border-rose-100 dark:border-rose-800 flex items-center gap-2">
+                                                                        <Fingerprint className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                                                                        <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wide">Accountability</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Created By', value: test.audit?.created_by },
+                                                                            { label: 'Tested By', value: test.audit?.tested_by },
+                                                                            { label: 'Verified By', value: test.audit?.verified_by },
+                                                                            { label: 'Approved By', value: test.audit?.approved_by },
+                                                                            { label: 'Rejected By', value: test.audit?.rejected_by },
+                                                                        ].map(({ label, value }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right capitalize truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ── TIMESTAMPS CARD ── */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                                    <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
+                                                                        <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                                                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">Timeline</span>
+                                                                    </div>
+                                                                    <div className="p-3 space-y-2">
+                                                                        {[
+                                                                            { label: 'Created', value: test.timestamps?.created },
+                                                                            { label: 'Started', value: test.timestamps?.started },
+                                                                            { label: 'Completed', value: test.timestamps?.completed },
+                                                                            { label: 'Verified', value: test.timestamps?.verified },
+                                                                            { label: 'Approved', value: test.timestamps?.approved },
+                                                                            { label: 'Rejected', value: test.timestamps?.rejected },
+                                                                        ].map(({ label, value }) => (
+                                                                            <div key={label} className="flex items-start justify-between gap-2">
+                                                                                <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className={`text-xs font-medium text-right truncate max-w-[55%] ${value ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}>
+                                                                                    {value ?? '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                            </div>
+
+                                                            {/* ══ RESULTS SECTION ══ */}
+                                                            <h4 className="text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+                                                                <Barcode className="w-3.5 h-3.5" />
+                                                                Results For This Test
+                                                            </h4>
+
+                                                            {test.test_results && test.test_results.length > 0 ? (
+                                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                                    {test.test_results.map((result) => {
+                                                                        const parameter = result.snapshot?.parameter_used;
+                                                                        const isNumeric = parameter?.result_type === "numeric";
+
+                                                                        // Left-border accent color communicates interpretation at a glance
+                                                                        const interpretationAccent =
+                                                                            result.interpretation === "High"
+                                                                                ? "border-l-red-500"
+                                                                                : result.interpretation === "Low"
+                                                                                    ? "border-l-yellow-500"
+                                                                                    : "border-l-emerald-500";
+
+                                                                        return (
+                                                                            <div
+                                                                                key={result.id}
+                                                                                className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 border-l-4 ${interpretationAccent} p-4`}
+                                                                            >
+                                                                                {/* HEADER */}
+                                                                                <div className="flex items-start justify-between mb-3">
+                                                                                    <div>
+                                                                                        <h5 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                                                                            {parameter?.name || "Unknown Parameter"}
+                                                                                        </h5>
+                                                                                        <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">
+                                                                                            {parameter?.result_type || "N/A"} result
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <span
+                                                                                        className={`text-xs font-bold px-2 py-1 rounded-full ${result.interpretation === "High"
+                                                                                            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                                                                            : result.interpretation === "Low"
+                                                                                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                                                                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                                                                            }`}
+                                                                                    >
+                                                                                        {result.interpretation || "—"}
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                {/* RESULT VALUE */}
+                                                                                <p className="text-2xl font-extrabold text-gray-900 dark:text-gray-100 mb-3">
+                                                                                    {result.result_value}
+                                                                                    {isNumeric && parameter?.si_unit && (
+                                                                                        <span className="text-sm font-medium text-gray-400 dark:text-gray-500 ml-1.5">
+                                                                                            {parameter.si_unit}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </p>
+
+                                                                                {/* NUMERIC DETAILS */}
+                                                                                {isNumeric ? (
+                                                                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mb-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+                                                                                        <p><span className="font-medium text-gray-600 dark:text-gray-300">Reference:</span> {parameter?.reference_range || 'N/A'}</p>
+                                                                                        <p><span className="font-medium text-gray-600 dark:text-gray-300">Range:</span> {parameter?.normal_min}–{parameter?.normal_max}</p>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <p className="text-xs text-gray-400 dark:text-gray-500 italic mb-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+                                                                                        No reference range — qualitative result
+                                                                                    </p>
+                                                                                )}
+
+                                                                                {/* AUDIT */}
+                                                                                <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                                                                    <p><span className="font-medium">Instrument:</span> {result.test_instrument?.test_instrument_name || "N/A"}</p>
+                                                                                    <p><span className="font-medium">Entered:</span> {result.test_result_entered_by?.name || "N/A"} {result.time_entered && `· ${result.time_entered}`}</p>
+                                                                                    <p><span className="font-medium">Verified:</span> {result.test_result_verified_by?.name || "Not verified yet"} {result.time_verified && `· ${result.time_verified}`}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 py-8 text-center">
+                                                                    <p className="text-sm font-semibold text-gray-400 dark:text-gray-500">
+                                                                        No test results recorded for this test yet.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -1604,7 +1741,70 @@ export function PatientLabTestRequests() {
             )}
 
 
-            {/* ENTER RESULTS MODAL */}
+            {/* VERIFY RESULTS CONFIRMATION MODAL */}
+            {/* Asks the user to confirm before verifying a test's results — verification
+            hands the test off to the approval stage, so we don't want a stray click to
+            trigger it without a deliberate confirm step. */}
+            {showVerifyModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-md rounded-xl shadow-lg p-6">
+
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                Verify Test Results
+                            </h3>
+                            <button
+                                onClick={closeVerifyModal}
+                                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                            <p>
+                                Are you sure you want to verify the results for{" "}
+                                <span className="font-bold">
+                                    #LT-{testToVerify?.id} — {testToVerify?.test_info?.test_type}
+                                </span>
+                                {testToVerify?.patient?.name && (
+                                    <> for patient <span className="font-bold">{testToVerify.patient.name}</span></>
+                                )}?
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Once verified, this test moves to the approval stage.
+                            </p>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                onClick={closeVerifyModal}
+                                className="px-4 py-2 text-xs font-bold rounded-lg
+                        bg-gray-100 text-gray-700
+                        dark:bg-gray-800 dark:text-gray-300"
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                onClick={confirmVerifyResults}
+                                disabled={loading}
+                                className="px-4 py-2 text-xs font-bold rounded-lg
+                        bg-teal-600 text-white
+                        hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? "Verifying..." : "Confirm Verification"}
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
+
             {/* ENTER RESULTS MODAL */}
             {showEnterResultsModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1632,7 +1832,7 @@ export function PatientLabTestRequests() {
 
 
                             <button
-                                onClick={() => setShowEnterResultsModal(false)}
+                                onClick={closeEnterResultsModal}
                                 className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                             >
                                 ✕
@@ -1661,13 +1861,14 @@ export function PatientLabTestRequests() {
                         {/* BODY - Scrollable Parameters */}
                         <div className="flex-1 overflow-y-auto p-6">
                             {loading ? (
-                                <div className="space-y-4">
-                                    {[...Array(3)].map((_, i) => (
-                                        <Skeleton key={i} height={80} />
-                                    ))}
+                                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                                    <RefreshCw className="w-8 h-8 text-purple-600 dark:text-purple-400 animate-spin" />
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Loading test parameters...
+                                    </p>
                                 </div>
                             ) : parameters.length === 0 ? (
-                                <p>
+                                <p className="text-red-50">
                                     {totalConfiguredParameters === 0
                                         ? "No parameters configured for this test type."
                                         : "No parameters match this patient’s age and gender. Please configure reference ranges for this test type to fit the patient’s demographics."}
@@ -1760,7 +1961,7 @@ export function PatientLabTestRequests() {
                         {/* FOOTER */}
                         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                             <button
-                                onClick={() => setShowEnterResultsModal(false)}
+                                onClick={closeEnterResultsModal}
                                 className="px-4 py-2 text-xs font-bold rounded-lg
                                 bg-gray-100 text-gray-700
                                 dark:bg-gray-800 dark:text-gray-300
@@ -1776,14 +1977,52 @@ export function PatientLabTestRequests() {
                                 bg-purple-600 text-white
                                 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                             >
-                                Submit Results
+                                Submit Test Results
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* PDF PREVIEW MODAL */}
+            {/* Shared by both "View Test Request Form" and "View Test Result Form" buttons */}
+            {showPdfPreviewModal && (
+                <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between px-5 py-3
+                        bg-white dark:bg-gray-900
+                        border-b border-gray-200 dark:border-gray-700
+                        flex-shrink-0">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                            {pdfPreviewTitle}
+                        </h3>
+                        <button
+                            onClick={closePdfPreviewModal}
+                            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300
+                                text-lg font-bold leading-none"
+                        >
+                            ✕
+                        </button>
+                    </div>
 
+                    {/* Modal Body */}
+                    <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        {pdfPreviewLoading ? (
+                            <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                                <RefreshCw className="w-8 h-8 animate-spin text-sky-500" />
+                                <span className="text-sm">Generating PDF&hellip;</span>
+                            </div>
+                        ) : pdfPreviewUrl ? (
+                            <iframe
+                                src={pdfPreviewUrl}
+                                title={pdfPreviewTitle}
+                                className="w-full h-full border-0"
+                                style={{ minHeight: 0 }}
+                            />
+                        ) : null}
+                    </div>
+                </div>
+            )}
 
         </>
     );

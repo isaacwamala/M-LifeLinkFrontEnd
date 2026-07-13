@@ -1,126 +1,189 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  Menu, Home, BarChart3, Users, Settings, Bell,
-  Antenna, User, ArchiveRestore, ChevronLeft, ChevronDown, ChevronRight, Wrench,
-  FileText, Folder, Shield, LogOut, UserCircle, Store, Hospital, FlaskConical, Pill, AlignVerticalJustifyEnd
+  Menu, Home, Users, Settings,
+  User, ChevronLeft, ChevronDown, Wrench,
+  FileText, LogOut, UserCircle, Store, CalendarMinus2, Hospital, FlaskConical, Pill, Send, BedDouble, DollarSign,
+  DoorOpen, UserCheck, UserPlus, ShieldCheck, Layers,
+  Truck, Warehouse, Package, Ruler, ClipboardList, ShoppingCart, Banknote, CreditCard,
+  SlidersHorizontal, PackagePlus, Boxes, RefreshCw, ScrollText,Bed,
+  UserRound, CalendarCheck, CalendarDays, CalendarClock, CalendarRange,
+  Microscope, TestTube2, TestTube, ArrowLeftRight, Tag, Monitor, TrendingUp, Receipt, History
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from '../assets/i.png';
 import { useSelector, useDispatch } from "react-redux";
-import { logoutUser } from "../redux/slice/authSlice";
 import { API_BASE_URL } from "../general/constants";
+import { getAvailableDashboards } from "../general/dashboardRoles";
 import apiRequest from "../general/common";
+import { NotificationBell } from "../notifications/NotificationBell";
+import { toast, ToastContainer } from "react-toastify";
+import { logoutUser } from "../redux/slice/authSlice"; //import logout user action from redux slice
 
 export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
   const [openDropdown, setOpenDropdown] = useState(null);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { user } = useSelector((state) => state.auth);
   const { role } = useSelector((state) => state.roles);
   const userModalRef = useRef(null);
 
+  // use the logout user action to logout the user using redux
+  const handleLogout = async () => {
+    try {
+      await dispatch(logoutUser()); // Dispatch loginUser action with form data
+      localStorage.removeItem("user");
+      localStorage.removeItem("encryptedData");
+      localStorage.removeItem("persist:root");
+      toast.success("Logout Successful");
+      const navigateAfterDelay = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1000)); //delay 1 second
+        navigate("/");
+      };
+      navigateAfterDelay();
+    } catch (error) {
+      toast.error("error occured");
+    }
+  };
 
+
+
+
+  const roleIds = user?.data?.user?.role_id;
+  const availableDashboards = getAvailableDashboards(roleIds);
+
+  const dashboardMenuItem =
+    availableDashboards.length === 0
+      ? null
+      : availableDashboards.length === 1
+      ? { icon: Home, label: availableDashboards[0].label, active: true, link: availableDashboards[0].path }
+      : {
+          icon: Home,
+          label: "Dashboard",
+          active: true,
+          hasDropdown: true,
+          children: availableDashboards.map((d) => ({ icon: Home, label: d.label, link: d.path })),
+        };
 
   const menuItems = [
-    { icon: Home, label: "Dashboard", active: true, link: "/dashboard" },
-    // { icon: BarChart3, label: "Analytics", link: "/analytics" },
-    // { icon: ArchiveRestore, label: "Suppliers", link: "/suppliers" },
-    // { icon: Antenna, label: "Products Categories", link: "/categories" },
+    ...(dashboardMenuItem ? [dashboardMenuItem] : []),
 
     {
       icon: Wrench,
       label: "Medical configurations",
       hasDropdown: true,
       children: [
-        { label: "Wards", icon: Shield, link: "/ward_manager" },
-        { label: "Medical rooms", icon: Settings, link: "/medical_rooms" },
-        { label: "Assign doctors to rooms", icon: Shield, link: "/doctor/rooms/assignments" },
+        { label: "Wards", icon: BedDouble, link: "/ward_manager" },
+        { label: "Medical rooms", icon: DoorOpen, link: "/medical_rooms" },
+        { label: "Assign doctors to rooms", icon: UserCheck, link: "/doctor/rooms/assignments" },
+        { label: "Lab Instruments", icon: Microscope, link: "/lab_instruments" },
+        { label: "Department staffing", icon: Users, link: "/department_staffing" },
+        { label: "Business Settings", icon: Settings, link: "/business_settings" },
       ]
     },
+
 
     {
       icon: Users,
       label: "User management",
       hasDropdown: true,
       children: [
-        { label: "register user", icon: Shield, link: "/create_user_account" },
+        { label: "register user", icon: UserPlus, link: "/create_user_account" },
         { label: "All Users", icon: Users, link: "/users" },
-        { label: "Assign roles", icon: Shield, link: "/assign_role_to_user" },
-        { label: "Account types", icon: FileText, link: "/usergroups" },
+        { label: "Assign roles", icon: ShieldCheck, link: "/assign_role_to_user" },
+        { label: "Account types", icon: Layers, link: "/usergroups" },
       ]
     },
 
-    // Ware house and supplier management
+
+    // Warehouse and supplier management
     {
-      icon: Store,
-      label: "Suppliers and purchases",
+      icon: Truck,
+      label: "Supply and purchase",
       hasDropdown: true,
       children: [
-        { label: "Suppliers", icon: Settings, link: "/suppliers" },
-        { label: "WareHouses", icon: Shield, link: "/warehouses" },
-        { icon: Antenna, label: "create purchase order", link: "/create_purchase_order" },
-        { label: "purchase orders", icon: Settings, link: "/purchase_orders" },
-        { label: "Supplier payments", icon: Settings, link: "/supplier/order_payments" },
-        { label: "Supplier order payments", icon: Settings, link: "/supplier/order_payments/analysis" },
+        { label: "Suppliers", icon: Truck, link: "/suppliers" },
+        { label: "WareHouses", icon: Warehouse, link: "/warehouses" },
+        { label: "Product items", icon: Package, link: "/medical_supply_items" },
+        { label: "UOM converter", icon: Ruler, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
+        { label: "Quotations", icon: ClipboardList, link: "/rfqs" },
+        { icon: ShoppingCart, label: "create purchase order", link: "/create_purchase_order" },
+        { label: "purchase orders", icon: ShoppingCart, link: "/purchase_orders" },
+        { label: "Supplier payments", icon: Banknote, link: "/supplier/order_payments" },
+        { label: "Supplier order payments", icon: CreditCard, link: "/supplier/order_payments/analysis" },
       ]
     },
 
     {
-      icon: Store,
+      icon: Boxes,
       label: "Stock management",
       hasDropdown: true,
       children: [
-        { icon: Antenna, label: "register stock", link: "/register_medical_stock" },
-        { label: "Manage stock", icon: Settings, link: "/medical_stock" },
-        { label: "stock adjustments", icon: Settings, link: "/stock_adjustments" },
-        { label: "Adjustment logs", icon: Settings, link: "/stock_adjustments_logs" },
-        { label: "Stock returns", icon: Settings, link: "/stock_returns" },
+        { label: "Variant Options Manager", icon: SlidersHorizontal, link: "/variant_options_manager" },
+        { label: "Product items", icon: Package, link: "/medical_supply_items" },
+        { label: "UOM conversion", icon: Ruler, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
+        { icon: PackagePlus, label: "register stock", link: "/register_medical_stock" },
+        { label: "Manage stock", icon: Boxes, link: "/medical_stock" },
+        { label: "stock adjustments", icon: RefreshCw, link: "/stock_adjustments" },
+        { label: "Adjustment logs", icon: ScrollText, link: "/stock_adjustments_logs" },
+        // { label: "Stock returns", icon: RefreshCw, link: "/stock_returns" },
       ]
     },
 
+    // Inventory
+    { icon: Boxes, label: "Inventory", link: "/inventory" },
 
+    { icon: Send, label: "Send Notifications", link: "/send_notifications" },
 
-    // Inventory 
-    { icon: AlignVerticalJustifyEnd, label: "Inventory", link: "/inventory" },
-
-    //Lab configs 
+    // Patients
     {
-      icon: Users,
+      icon: UserRound,
       label: "Patients",
       hasDropdown: true,
       children: [
-        { icon: Antenna, label: "Manage patients", link: "/patients" },
+        { icon: UserRound, label: "Manage patients", link: "/patients" },
       ]
     },
 
-    //Patient Visits 
+    // Appointments
+    {
+      icon: CalendarMinus2,
+      label: "Appointments",
+      hasDropdown: true,
+      children: [
+        { icon: CalendarCheck, label: "Manage appointments", link: "/appointments/management" },
+        { icon: CalendarDays, label: "Appointments Calender", link: "/appointments/calendar" },
+        { icon: CalendarClock, label: "Appointments Today", link: "/appointments/today" },
+        { icon: CalendarRange, label: "Available slots", link: "/appointments/available_slots" },
+      ]
+    },
+
+    // Patient Visits
     {
       icon: Hospital,
       label: "Visits",
       hasDropdown: true,
       children: [
-        { label: "Patient visits", icon: Settings, link: "/patient_visits" },
+        { label: "Patient visits", icon: ClipboardList, link: "/patient_visits" },
       ]
     },
 
-
-    //Lab configs 
+    // Lab configs
     {
       icon: FlaskConical,
       label: "Laboratory",
       hasDropdown: true,
       children: [
-        { icon: Antenna, label: "Manage lab sections", link: "/lab_sections" },
-        { label: "Lab instruments", icon: Settings, link: "/instruments" },
-        { label: "Specimens", icon: Settings, link: "/specimens" },
-        { label: "Lab Test types", icon: Settings, link: "/test_types" },
-        { label: "Specimens to test types", icon: Settings, link: "/manage_specimen/and_their_test_types" },
-        { label: "Result parameters", icon: Settings, link: "/manage/test_types_result/parameter_measure/setup" },
-        { label: "Patient Lab Tests ", icon: Settings, link: "/patient_lab/test/requests" },
-        { icon: Antenna, label: "Tests and Results", link: "/patient_test_and_results" },
-
-
+        { icon: FlaskConical, label: "Manage lab sections", link: "/lab_sections" },
+        { label: "Lab instruments", icon: Microscope, link: "/instruments" },
+        { label: "Specimens", icon: TestTube2, link: "/specimens" },
+        { label: "Lab Test types", icon: TestTube, link: "/test_types" },
+        { label: "Specimens to test types", icon: ArrowLeftRight, link: "/manage_specimen/and_their_test_types" },
+        { label: "Result parameters", icon: SlidersHorizontal, link: "/manage/test_types_result/parameter_measure/setup" },
+        { label: "Patient Lab Tests ", icon: ClipboardList, link: "/patient_lab/test/requests" },
+        { icon: FileText, label: "Tests and Results", link: "/patient_test_and_results" },
       ]
-
     },
 
 
@@ -129,15 +192,42 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
       label: "Pharmacy",
       hasDropdown: true,
       children: [
-        { label: "Unit Of Measure", icon: Settings, link: "/unit_of_measure" },
-        { label: "UOM converter", icon: Shield, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
-        { icon: Antenna, label: "item categories", link: "/categories" },
-        { label: "medical items", icon: Settings, link: "/medical_supply_items" },
-        { label: "prescriptions & dispensing", icon: Settings, link: "/medical/prescriptions" },
-        { icon: Antenna, label: "register sale", link: "/register_pharmacy_sales" },
-        { label: "Sales", icon: Settings, link: "/pharmacy_sales" },
+        { label: "Unit Of Measure", icon: Ruler, link: "/unit_of_measure" },
+        { label: "UOM converter", icon: ArrowLeftRight, link: "/convert_different_uoms_in_terms_of_product_base_unit" },
+        { icon: Tag, label: "item categories", link: "/categories" },
+        { label: "medical items", icon: Package, link: "/medical_supply_items" },
+        { label: "prescriptions & dispensing", icon: Pill, link: "/medical/prescriptions" },
+        { icon: Monitor, label: "POS Terminal", link: "/pharmacy_pos_terminal" },
+        { label: "Sales", icon: TrendingUp, link: "/pharmacy_sales" },
+        { label: "Customer Management", icon: UserRound, link: "/customer_management" },
+        { label: "Credit Invoices", icon: FileText, link: "/credit_invoices" },
       ]
     },
+
+
+     {
+      icon: Bed,
+      label: "Ward Management",
+      hasDropdown: true,
+      children: [
+        { label: "Ward Requests", icon: ClipboardList, link: "/ward_assignments_board" },
+      ]
+    },
+
+
+    // Billing
+    {
+      icon: DollarSign,
+      label: "Medical Billing",
+      hasDropdown: true,
+      children: [
+        { label: "Billing Rates", icon: Tag, link: "/billing_rates" },
+        { label: "Invoices & payments", icon: FileText, link: "/invoices" },
+        { label: "Payment Receipts", icon: Receipt, link: "/payment_receipts" },
+      ]
+    },
+
+    { icon: History, label: "Activity Logs", link: "/activity_logs" },
 
   ];
 
@@ -191,10 +281,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
 
           {/* Notifications + Profile */}
           <div className="flex items-center gap-4">
-            <button className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-              <Bell className="w-6 h-6 text-gray-700 dark:text-gray-200" />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
-            </button>
+            <NotificationBell />
 
             {/* User Profile with Modal */}
             <div className="relative" ref={userModalRef}>
@@ -229,13 +316,14 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
                     <span className="text-gray-700 dark:text-gray-200">My Account</span>
                   </a>
                   <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                  <a
-                    href="/"
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => { setShowUserModal(false); setShowLogoutConfirm(true); }}
+                    className="w-full flex items-center gap-3 px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
                   >
                     <LogOut className="w-4 h-4 text-red-600 dark:text-red-400" />
                     <span className="text-red-600 dark:text-red-400">Logout</span>
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
@@ -261,7 +349,7 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
               <h1
                 className={`text-white dark:text-gray-100 text-lg font-bold transition-opacity duration-300 ${isCollapsed ? "opacity-0 w-0" : "opacity-100"}`}
               >
-                MEDICONNECT
+                LIFE-LINK
               </h1>
             </div>
             <button
@@ -350,6 +438,28 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
                   </li>
                 );
               })}
+
+              {/* Logout */}
+              <li className="group relative">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-red-400 hover:bg-red-900/20 hover:text-red-300 text-left"
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span className={`transition-opacity duration-300 whitespace-nowrap ${isCollapsed ? "opacity-0 w-0" : "opacity-100"}`}>
+                    Logout
+                  </span>
+                </button>
+
+                {/* Tooltip for collapsed state */}
+                {isCollapsed && (
+                  <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 text-xs rounded bg-gray-800 dark:bg-gray-700 text-white dark:text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                    Logout
+                  </span>
+                )}
+              </li>
+
             </ul>
           </nav>
 
@@ -360,7 +470,49 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
             </div>
           </div>
         </div>
+
+
       </aside>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden animate-fade-in">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                  <LogOut className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">Log out?</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                You'll need to sign in again to access your account.
+              </p>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowLogoutConfirm(false); handleLogout(); }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition"
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+          @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+          .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+      `}</style>
     </>
   );
 }
+

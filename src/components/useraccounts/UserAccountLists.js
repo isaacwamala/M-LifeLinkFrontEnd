@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Edit, Eye,  ChevronLeft, ChevronRight,Percent,Workflow,UsersRound,Users, Target } from 'lucide-react';
+import { Edit, Eye, ChevronLeft, ChevronRight, Percent, Workflow, UsersRound, Users, Target } from 'lucide-react';
 import { toast, ToastContainer } from "react-toastify";
 import Select from 'react-select';
 import Skeleton from 'react-loading-skeleton';
@@ -125,14 +125,13 @@ function UserAccountLists() {
             email: user.email,
             username: user.username,
             phone_number: user.phone_number,
-            role_id: user.role?.id || '',
+            role_id: user.roles?.map((r) => ({ value: r.id, label: r.display_name })) || [],
             profile_image: null,
             branch_id: user.branch?.id || '',
         });
         setShowUpdateModal(true);
         setDropdownOpen(null);
     };
-
     const handleStatusClick = (user) => {
         setSelectedUser(user);
         setStatus(Number(user.user_status) === 1 ? 0 : 1);
@@ -166,18 +165,16 @@ function UserAccountLists() {
                 email: formData.email,
                 username: formData.username,
                 phone_number: formData.phone_number,
-                role_id: formData.role_id,
+                role_id: formData.role_id.map((r) => r.value), // send [1, 8, 5] not objects
                 branch_id: formData.branch_id,
             };
 
             const response = await axios.post(`${API_BASE_URL}updateUserAccount`, userData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { Authorization: `Bearer ${token}` },
             });
-            
+
             toast.success(response.data.message);
-           fetchUsers(); //refresh the user list and this clears cahed data from backend,and then rebuilds new ones
+            fetchUsers();
             setShowUpdateModal(false);
         } catch (error) {
             console.error('Failed to update user account:', error);
@@ -230,229 +227,233 @@ function UserAccountLists() {
     return (
         <>
             <ToastContainer />
-             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
-              
-                    <div className="w-full">
-                        <div className="p-4 border-2 border-blue-200 border-dashed rounded-lg dark:border-blue-700">
-                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                                {/* Header */}
-                                <div className="bg-gradient-to-r from-blue-500 to-purple-900 dark:bg-green-700 px-6 py-4">
-                                    <h3 className="text-center text-white text-2xl">Users</h3>
-                                </div>
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 overflow-x-hidden pt-10">
 
-                                {/* Body */}
-                                <div className="p-6">
-                                    {loading ? (
-                                        <div className="flex flex-col gap-4">
-                                            {Array.from({ length: 4 }).map((_, index) => (
-                                                <div key={index} role="status" className="w-full animate-pulse">
-                                                    <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full w-48 mb-4"></div>
-                                                    <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-full mb-2.5"></div>
-                                                    <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-3/4 mb-2.5"></div>
-                                                    <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-1/2 mb-2.5"></div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <>
-                                           
-                                            {/* Metric Cards */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-
-                                                {/* Total Users */}
-                                                <div className="bg-blue-600 rounded-xl p-6 flex flex-col justify-between">
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div>
-                                                            <p className="text-blue-100 text-sm mb-1">Total Users</p>
-                                                            <p className="text-white text-3xl">{analytics.totalUsers}</p>
-                                                        </div>
-                                                        <div className="bg-white/20 rounded-lg p-2">
-                                                            <Users className="w-6 h-6 text-white" />
-                                                            
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Active Users */}
-                                                <div className="bg-teal-600 rounded-xl p-6 flex flex-col justify-between">
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div>
-                                                            <p className="text-teal-100 text-sm mb-1">Active Users</p>
-                                                            <p className="text-white text-3xl">{analytics.activeUsers}</p>
-                                                        </div>
-                                                        <div className="bg-white/20 rounded-lg p-2">
-                                                            <Users className="w-6 h-6 text-white" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Inactive Users */}
-                                                <div className="bg-orange-600 rounded-xl p-6 flex flex-col justify-between">
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div>
-                                                            <p className="text-orange-100 text-sm mb-1">Inactive Users</p>
-                                                            <p className="text-white text-3xl">{analytics.inactiveUsers}</p>
-                                                        </div>
-                                                        <div className="bg-white/20 rounded-lg p-2">
-                                                            <UsersRound className="w-6 h-6 text-white" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Total Roles */}
-                                                <div className="bg-purple-600 rounded-xl p-6 flex flex-col justify-between">
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div>
-                                                            <p className="text-purple-100 text-sm mb-1">Total Roles</p>
-                                                            <p className="text-white text-3xl">{analytics.totalRoles}</p>
-                                                        </div>
-                                                        <div className="bg-white/20 rounded-lg p-2">
-                                                            <Workflow className="w-6 h-6 text-white" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Percentage Active */}
-                                                <div className="bg-teal-700 rounded-xl p-6 flex flex-col justify-between">
-                                                    <div className="flex items-start justify-between mb-3">
-                                                        <div>
-                                                            <p className="text-teal-100 text-sm mb-1">Active Percentage</p>
-
-                                                            <p className="text-white text-3xl">
-                                                                {analytics.totalUsers > 0
-                                                                    ? `${Math.round((analytics.activeUsers / analytics.totalUsers) * 100)}%`
-                                                                    : "0%"}
-                                                            </p>
-                                                        </div>
-                                                        <div className="bg-white/20 rounded-lg p-2">
-                                                            <Percent className="w-6 h-6 text-white" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                            </div>
-
-
-                                            {/* Search Input */}
-                                            <div className="mb-6">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search by name, email, or username..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => {
-                                                        setSearchTerm(e.target.value);
-                                                        setCurrentPage(1);
-                                                    }}
-                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                />
-                                            </div>
-
-
-
-
-                                            {/* Table */}
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full">
-                                                    <thead className="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Name</th>
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Email</th>
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Phone number</th>
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Account type</th>
-                                                            {user?.data?.plan === "pro" && (
-                                                                <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Branch</th>
-                                                            )}
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">User status</th>
-                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white dark:bg-gray-800">
-                                                        {currentUsers.map((userData, index) => (
-                                                            <tr
-                                                                key={index}
-                                                                className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                                            >
-                                                                <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.name}</td>
-                                                                <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.email}</td>
-                                                                <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.phone_number}</td>
-                                                                <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.role?.display_name || ' '}</td>
-                                                                {user?.data?.plan === "pro" && (
-                                                                    <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.branch?.name || ' '}</td>
-                                                                )}
-                                                                <td className="px-4 py-3">
-                                                                    <span
-                                                                        className={`inline-block px-3 py-1 rounded-full text-white ${Number(userData.user_status) === 1 ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-red-500'
-                                                                            }`}
-                                                                    >
-                                                                        {Number(userData.user_status) === 1 ? 'Active' : 'Deactivated'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-3">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <button
-                                                                            onClick={() => handleUpdateClick(userData)}
-                                                                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                                                                            title="Update User"
-                                                                        >
-                                                                            <Edit size={20} />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleStatusClick(userData)}
-                                                                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-                                                                            title={Number(userData.user_status) === 1 ? 'Deactivate' : 'Activate'}
-                                                                        >
-                                                                            <Eye size={20} />
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-
-                                            {/* Pagination */}
-                                            <div className="mt-6 flex items-center justify-between">
-                                                <div className="text-gray-700 dark:text-gray-300">
-                                                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => handlePageChange(currentPage - 1)}
-                                                        disabled={currentPage === 1}
-                                                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        <ChevronLeft size={20} />
-                                                    </button>
-                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                                        <button
-                                                            key={page}
-                                                            onClick={() => handlePageChange(page)}
-                                                            className={`px-4 py-2 rounded ${currentPage === page
-                                                                ? 'bg-blue-600 text-white'
-                                                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                                                                }`}
-                                                        >
-                                                            {page}
-                                                        </button>
-                                                    ))}
-                                                    <button
-                                                        onClick={() => handlePageChange(currentPage + 1)}
-                                                        disabled={currentPage === totalPages}
-                                                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        <ChevronRight size={20} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-
+                <div className="w-full">
+                    <div className="p-4 border-2 border-blue-200 border-dashed rounded-lg dark:border-blue-700">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-blue-500 to-purple-900 dark:bg-green-700 px-6 py-4">
+                                <h3 className="text-center text-white text-2xl">Users</h3>
                             </div>
+
+                            {/* Body */}
+                            <div className="p-6">
+                                {loading ? (
+                                    <div className="flex flex-col gap-4">
+                                        {Array.from({ length: 4 }).map((_, index) => (
+                                            <div key={index} role="status" className="w-full animate-pulse">
+                                                <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full w-48 mb-4"></div>
+                                                <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-full mb-2.5"></div>
+                                                <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-3/4 mb-2.5"></div>
+                                                <div className="h-2 bg-gray-300 dark:bg-gray-600 rounded-full w-1/2 mb-2.5"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <>
+
+                                        {/* Metric Cards */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+
+                                            {/* Total Users */}
+                                            <div className="bg-blue-600 rounded-xl p-6 flex flex-col justify-between">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-blue-100 text-sm mb-1">Total Users</p>
+                                                        <p className="text-white text-3xl">{analytics.totalUsers}</p>
+                                                    </div>
+                                                    <div className="bg-white/20 rounded-lg p-2">
+                                                        <Users className="w-6 h-6 text-white" />
+
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Active Users */}
+                                            <div className="bg-teal-600 rounded-xl p-6 flex flex-col justify-between">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-teal-100 text-sm mb-1">Active Users</p>
+                                                        <p className="text-white text-3xl">{analytics.activeUsers}</p>
+                                                    </div>
+                                                    <div className="bg-white/20 rounded-lg p-2">
+                                                        <Users className="w-6 h-6 text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Inactive Users */}
+                                            <div className="bg-orange-600 rounded-xl p-6 flex flex-col justify-between">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-orange-100 text-sm mb-1">Inactive Users</p>
+                                                        <p className="text-white text-3xl">{analytics.inactiveUsers}</p>
+                                                    </div>
+                                                    <div className="bg-white/20 rounded-lg p-2">
+                                                        <UsersRound className="w-6 h-6 text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Total Roles */}
+                                            <div className="bg-purple-600 rounded-xl p-6 flex flex-col justify-between">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-purple-100 text-sm mb-1">Total Roles</p>
+                                                        <p className="text-white text-3xl">{analytics.totalRoles}</p>
+                                                    </div>
+                                                    <div className="bg-white/20 rounded-lg p-2">
+                                                        <Workflow className="w-6 h-6 text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Percentage Active */}
+                                            <div className="bg-teal-700 rounded-xl p-6 flex flex-col justify-between">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <p className="text-teal-100 text-sm mb-1">Active Percentage</p>
+
+                                                        <p className="text-white text-3xl">
+                                                            {analytics.totalUsers > 0
+                                                                ? `${Math.round((analytics.activeUsers / analytics.totalUsers) * 100)}%`
+                                                                : "0%"}
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-white/20 rounded-lg p-2">
+                                                        <Percent className="w-6 h-6 text-white" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+
+
+                                        {/* Search Input */}
+                                        <div className="mb-6">
+                                            <input
+                                                type="text"
+                                                placeholder="Search by name, email, or username..."
+                                                value={searchTerm}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            />
+                                        </div>
+
+
+
+
+                                        {/* Table */}
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-300 dark:border-gray-600">
+                                                    <tr>
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Name</th>
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Email</th>
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Phone number</th>
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Account type</th>
+                                                        {user?.data?.plan === "pro" && (
+                                                            <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Branch</th>
+                                                        )}
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">User status</th>
+                                                        <th className="px-4 py-3 text-left text-blue-600 dark:text-blue-400">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white dark:bg-gray-800">
+                                                    {currentUsers.map((userData, index) => (
+                                                        <tr
+                                                            key={index}
+                                                            className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                        >
+                                                            <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.name}</td>
+                                                            <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.email}</td>
+                                                            <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.phone_number}</td>
+                                                            <td className="px-4 py-3 text-gray-900 dark:text-gray-200">
+                                                                {userData.roles?.length
+                                                                    ? userData.roles.map((r) => r.display_name).join(', ')
+                                                                    : '—'}
+                                                            </td>
+                                                            {user?.data?.plan === "pro" && (
+                                                                <td className="px-4 py-3 text-gray-900 dark:text-gray-200">{userData.branch?.name || ' '}</td>
+                                                            )}
+                                                            <td className="px-4 py-3">
+                                                                <span
+                                                                    className={`inline-block px-3 py-1 rounded-full text-white ${Number(userData.user_status) === 1 ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-red-500'
+                                                                        }`}
+                                                                >
+                                                                    {Number(userData.user_status) === 1 ? 'Active' : 'Deactivated'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <button
+                                                                        onClick={() => handleUpdateClick(userData)}
+                                                                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                                                                        title="Update User"
+                                                                    >
+                                                                        <Edit size={20} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleStatusClick(userData)}
+                                                                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors"
+                                                                        title={Number(userData.user_status) === 1 ? 'Deactivate' : 'Activate'}
+                                                                    >
+                                                                        <Eye size={20} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Pagination */}
+                                        <div className="mt-6 flex items-center justify-between">
+                                            <div className="text-gray-700 dark:text-gray-300">
+                                                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredUsers.length)} of {filteredUsers.length} entries
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handlePageChange(currentPage - 1)}
+                                                    disabled={currentPage === 1}
+                                                    className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <ChevronLeft size={20} />
+                                                </button>
+                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                    <button
+                                                        key={page}
+                                                        onClick={() => handlePageChange(page)}
+                                                        className={`px-4 py-2 rounded ${currentPage === page
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                                            }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    onClick={() => handlePageChange(currentPage + 1)}
+                                                    disabled={currentPage === totalPages}
+                                                    className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <ChevronRight size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
                         </div>
                     </div>
-                
+                </div>
+
             </div>
 
             {/* Update User Modal - Flowbite Style */}
@@ -530,20 +531,13 @@ function UserAccountLists() {
                                         <label className="block mb-2 text-gray-900 dark:text-white">
                                             Account type
                                         </label>
-                                        <select
-                                            value={formData.role_id || ""}
-                                            onChange={(e) => setFormData({ ...formData, role_id: Number(e.target.value) })}
-                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        >
-                                            <option value="" disabled>
-                                                Select account type
-                                            </option>
-                                            {roles.map((role) => (
-                                                <option key={role.id} value={role.id}>
-                                                    {role.display_name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Select
+                                            isMulti
+                                            options={roles.map((role) => ({ value: role.id, label: role.display_name }))}
+                                            value={formData.role_id}
+                                            onChange={(selected) => setFormData({ ...formData, role_id: selected || [] })}
+                                            classNamePrefix="react-select"
+                                        />
                                     </div>
 
                                     {/* User Branch */}

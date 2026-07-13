@@ -1,12 +1,15 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, TrendingUp, TrendingDown, AlertCircle, Package } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
 import axios from "axios";
 import { API_BASE_URL } from "../general/constants";
-import { fetchUoms } from '../products/products_helper';
+import { fetchUoms, fetchProductsWithBatchesForAsyncSelect, getBatchDisplayNumber } from '../products/products_helper';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
+import AsyncSelect from 'react-select/async';
+import { getSelectClassNames } from '../general/searchSelectStyles';
 
 
 const StockReturns = () => {
@@ -14,7 +17,6 @@ const StockReturns = () => {
     const navigate = useNavigate();
     const [showModal, setShowModal] = useState(false);
     const [filteredReturns, setFilteredReturns] = useState([]);
-    const [productWithBatches, setProductWithBatches] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [uoms, setUoms] = useState([]);
@@ -23,6 +25,10 @@ const StockReturns = () => {
     const token = localStorage.getItem('access_token');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [selectedProductOption, setSelectedProductOption] = useState(null);
+    const [selectedUomOption, setSelectedUomOption] = useState(null);
+    const [selectedBatchOption, setSelectedBatchOption] = useState(null);
+    const productDebounceRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const now = new Date();
@@ -117,40 +123,23 @@ const StockReturns = () => {
         }
     };
 
-    //Fetch products with their batches
-    const fetchProductWithTheirBatches = async () => {
-        try {
-            setLoading(true);
-
-            const response = await axios.get(`${API_BASE_URL}items/getProductsWithTheirBatches`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/json",
-                },
-
-            });
-
-            const data = response.data.products;
-            setProductWithBatches(data);
-
-        } catch (error) {
-            console.error("Error fetching product with batches", error);
-            toast.error("Failed to fetch products with batches");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     //fetch uoms
     const loadUoms = async () => {
         const data = await fetchUoms(token);
         setUoms(data);
     };
 
+    const loadProductOptions = (inputValue) =>
+        new Promise((resolve) => {
+            if (productDebounceRef.current) clearTimeout(productDebounceRef.current);
+            productDebounceRef.current = setTimeout(() => {
+                fetchProductsWithBatchesForAsyncSelect(token, inputValue).then(resolve);
+            }, 350);
+        });
+
     // Set fetched data on component mount
     useEffect(() => {
         fetchStockReturns(1); // always reset to page 1 when dates change
-        fetchProductWithTheirBatches();
         loadUoms();
         fetchProductsWithTheirUomConversions();
     }, [dateFrom, dateTo]);
@@ -202,12 +191,10 @@ const StockReturns = () => {
         const updated = { ...formData, [field]: value };
         setFormData(updated);
 
-        // If changing product, update selectedProduct + reset batch
+        // If changing product, reset batch (selectedProduct is set directly in AsyncSelect onChange)
         if (field === "product_id") {
-            const prod = productWithBatches.find(p => p.id.toString() === value.toString());
-            setSelectedProduct(prod || null);
+            setSelectedBatchOption(null);
 
-            // Reset batch when product changes
             setFormData(prev => ({
                 ...prev,
                 product_id: value,
@@ -229,11 +216,10 @@ const StockReturns = () => {
         );
 
         if (!hasConversion) {
-            const p = productWithBatches.find(pr => pr.id.toString() === product_id.toString());
             const u = uoms.find(um => um.id.toString() === selected_uom_id.toString());
 
             setModalMessage({
-                product: p?.name || "",
+                product: selectedProduct?.name || "",
                 uom: u?.name || ""
             });
 
@@ -350,6 +336,9 @@ const StockReturns = () => {
             });
 
             setSelectedProduct(null);
+            setSelectedProductOption(null);
+            setSelectedUomOption(null);
+            setSelectedBatchOption(null);
 
         } catch (error) {
             console.error(error);
@@ -490,7 +479,7 @@ const StockReturns = () => {
 
                                                 <td className="px-4 sm:px-6 py-3 text-sm text-gray-900 dark:text-white">
                                                     <div className="flex flex-col">
-                                                        <span className="font-medium">{adj.batch.batch_number}</span>
+                                                        <span className="font-medium">{getBatchDisplayNumber(adj.batch)}</span>
                                                         <span className="text-xs font-bold dark:bg-red-900/20 text-red-600 dark:text-red-400">
                                                             Exp: {adj.batch.expiry_date}
                                                         </span>
@@ -605,7 +594,7 @@ const StockReturns = () => {
                             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Register Stock Return</h2>
                                 <button
-                                    onClick={() => setIsModalOpen(false)}
+                                    onClick={() => { setIsModalOpen(false); setSelectedProductOption(null); setSelectedUomOption(null); setSelectedBatchOption(null); }}
                                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                                 >
                                     <X className="w-5 h-5 text-gray-900 dark:text-white" />
@@ -624,30 +613,19 @@ const StockReturns = () => {
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                                         Product *
                                     </label>
-                                    <select
-                                        value={formData.product_id || ''}
-                                        onChange={(e) =>
-                                            handleProductOrUOMChange("product_id", e.target.value)
-                                        }
-                                        required
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">Select a product</option>
-                                        {/* Show product option values on selection */}
-                                        {productWithBatches.map((product) => {
-                                            // Combine variant options into a single text string
-                                            const variantText = product.variant_options
-                                                ? product.variant_options.map(v => `${v.option_value}`).join(" / ")
-                                                : "";
-
-                                            return (
-                                                <option key={product.id} value={product.id}>
-                                                    {product.name}
-                                                    {variantText ? ` – ${variantText}` : ""}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
+                                    <AsyncSelect
+                                        loadOptions={loadProductOptions}
+                                        defaultOptions
+                                        value={selectedProductOption}
+                                        onChange={(option) => {
+                                            setSelectedProductOption(option);
+                                            setSelectedProduct(option?.raw ?? null);
+                                            handleProductOrUOMChange("product_id", option ? option.value : '');
+                                        }}
+                                        classNames={getSelectClassNames()}
+                                        isClearable
+                                        placeholder="Search product..."
+                                    />
                                 </div>
 
                                 {/* Show conversion information if available, for the selected product item's unit of measure */}
@@ -659,19 +637,17 @@ const StockReturns = () => {
                                         Unit of Measure To Adjust<span className="text-red-500">*</span>
                                     </label>
 
-                                    <select
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        value={formData.selected_uom_id}
-                                        onChange={(e) => handleProductOrUOMChange("selected_uom_id", e.target.value)}
-                                        required
-                                    >
-                                        <option value="">Select UOM</option>
-                                        {uoms.map((uom) => (
-                                            <option key={uom.id} value={uom.id}>
-                                                {uom.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <Select
+                                        options={uoms.map(u => ({ value: u.id.toString(), label: u.name }))}
+                                        value={selectedUomOption}
+                                        onChange={(option) => {
+                                            setSelectedUomOption(option);
+                                            handleProductOrUOMChange("selected_uom_id", option ? option.value : '');
+                                        }}
+                                        classNames={getSelectClassNames()}
+                                        isClearable
+                                        placeholder="Search or select UOM..."
+                                    />
                                 </div>
 
 
@@ -680,20 +656,21 @@ const StockReturns = () => {
                                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                                         Select Batch to make a return from*
                                     </label>
-                                    <select
-                                        value={formData.batch_id || ''}
-                                        onChange={(e) => setFormData({ ...formData, batch_id: Number(e.target.value) })}
-                                        required
-                                        disabled={!selectedProduct}
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <option value="">Select a batch</option>
-                                        {selectedProduct?.batch.map((b) => (
-                                            <option key={b.id} value={b.id}>
-                                                {b.batch_number} (Exp: {b.expiry_date})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <Select
+                                        options={(selectedProduct?.batch ?? []).map(b => ({
+                                            value: b.id,
+                                            label: `${getBatchDisplayNumber(b)} (Exp: ${b.expiry_date})`,
+                                        }))}
+                                        value={selectedBatchOption}
+                                        onChange={(option) => {
+                                            setSelectedBatchOption(option);
+                                            setFormData(prev => ({ ...prev, batch_id: option ? option.value : '' }));
+                                        }}
+                                        classNames={getSelectClassNames()}
+                                        isClearable
+                                        isDisabled={!selectedProduct}
+                                        placeholder="Select a batch..."
+                                    />
                                 </div>
 
 
@@ -784,9 +761,9 @@ const StockReturns = () => {
                                 <div className="flex gap-3 pt-4">
                                     <button
                                         type="button"
-                                        onClick={() => setIsModalOpen(false)}
-                                        className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600 
-            text-gray-900 dark:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 
+                                        onClick={() => { setIsModalOpen(false); setSelectedProductOption(null); setSelectedUomOption(null); setSelectedBatchOption(null); }}
+                                        className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600
+            text-gray-900 dark:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700
             transition-colors font-medium"
                                     >
                                         Cancel

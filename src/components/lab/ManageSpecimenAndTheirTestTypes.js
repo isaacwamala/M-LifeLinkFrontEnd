@@ -4,6 +4,8 @@ import { Save } from 'lucide-react';
 import { fetchTestTypes } from '../patients/patients_lab_tests_helper';
 import { fetchSpecimenTypes } from '../patients/patients_lab_tests_helper';
 import { toast, ToastContainer } from 'react-toastify';
+import { getSelectClassNames } from '../general/searchSelectStyles';
+import Select from 'react-select';
 
 import { API_BASE_URL } from '../general/constants';
 
@@ -91,7 +93,7 @@ export default function ManageSpecimenAndTheirTestTypes() {
     });
   };
 
-  
+
   // Handle saving the assigned test types to the specimen
   const handleSave = async () => {
     if (selectedSpecimenId === null) {
@@ -144,9 +146,8 @@ export default function ManageSpecimenAndTheirTestTypes() {
         {/* Header */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Test Types to Specimen Assignment Controller</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Assign Test Types to Specimens</h1>
           </div>
-
         </div>
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
           <p className="text-gray-600 dark:text-gray-300 text-sm md:text-base">
@@ -172,23 +173,32 @@ export default function ManageSpecimenAndTheirTestTypes() {
         {/* Main Content */}
         <div className="w-full px-6 py-8">
           {/* Specimen Selection Dropdown */}
+          {/* Specimen Selection Dropdown */}
           <div className="mb-6">
             <label htmlFor="specimen-select" className="block text-sm mb-2 text-gray-900 dark:text-white">
               Select Specimen
             </label>
-            <select
-              id="specimen-select"
-              value={selectedSpecimenId || ''}
-              onChange={(e) => setSelectedSpecimenId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full md:w-96 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Select a specimen --</option>
-              {specimens.map(specimen => (
-                <option key={specimen.id} value={specimen.id}>
-                  {specimen.specimen_name}
-                </option>
-              ))}
-            </select>
+            <div className="w-full md:w-96">
+              <Select
+                inputId="specimen-select"
+                options={specimens.map(specimen => ({
+                  value: specimen.id,
+                  label: specimen.specimen_name,
+                }))}
+                value={
+                  selectedSpecimenId
+                    ? {
+                      value: selectedSpecimenId,
+                      label: specimens.find(s => s.id === selectedSpecimenId)?.specimen_name || '',
+                    }
+                    : null
+                }
+                onChange={(option) => setSelectedSpecimenId(option ? option.value : null)}
+                classNames={getSelectClassNames()}
+                isClearable
+                placeholder="-- Select a specimen --"
+              />
+            </div>
           </div>
 
           {/* Test Types Assignment */}
@@ -219,37 +229,39 @@ export default function ManageSpecimenAndTheirTestTypes() {
                 Loading test types...
               </div>
             ) : (
-              <div className="space-y-3">
+              <div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   {assignedTestTypeIds.length} of {allTestTypes.length} test types assigned
                 </div>
-                {allTestTypes.map(testType => {
-                  const isAssigned = assignedTestTypeIds.includes(testType.id);
-                  return (
-                    <label
-                      key={testType.id}
-                      className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-colors ${isAssigned
-                        ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500 dark:border-blue-600'
-                        : 'bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-650 border-2 border-gray-200 dark:border-transparent'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isAssigned}
-                        onChange={() => handleTestTypeToggle(testType.id)}
-                        className="mt-1 w-5 h-5 rounded accent-blue-600"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 dark:text-white">{testType.name}</div>
-                        {testType.description && (
-                          <div className="text-sm mt-1 text-gray-600 dark:text-gray-400">
-                            {testType.description || 'No description available.'}
-                          </div>
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {allTestTypes.map(testType => {
+                    const isAssigned = assignedTestTypeIds.includes(testType.id);
+                    return (
+                      <label
+                        key={testType.id}
+                        className={`flex items-start gap-3 p-4 rounded-lg cursor-pointer transition-colors ${isAssigned
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500 dark:border-blue-600'
+                          : 'bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-650 border-2 border-gray-200 dark:border-transparent'
+                          }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isAssigned}
+                          onChange={() => handleTestTypeToggle(testType.id)}
+                          className="mt-1 w-5 h-5 rounded accent-blue-600"
+                        />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900 dark:text-white">{testType.name}</div>
+                          {testType.description && (
+                            <div className="text-sm mt-1 text-gray-600 dark:text-gray-400">
+                              {testType.description || 'No description available.'}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

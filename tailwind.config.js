@@ -7,7 +7,17 @@ module.exports = {
     "./node_modules/flowbite/**/*.js" // Include Flowbite core
   ],
   theme: {
-    extend: {},
+    extend: {
+      keyframes: {
+        fadeInDown: {
+          "0%":   { opacity: "0", transform: "translateY(-6px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        fadeInDown: "fadeInDown 0.12s ease-out",
+      },
+    },
   },
   plugins: [
     require('@tailwindcss/forms'),

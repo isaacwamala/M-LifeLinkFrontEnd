@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, HandCoins, ChevronRight, ChevronLeft, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, HandCoins, ChevronRight, ChevronLeft, X, Download, FileText, User, Stethoscope, FlaskConical, TestTube2 } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -16,6 +16,12 @@ export function PatientTestAndResultReports() {
     const [searchTerm, setSearchTerm] = useState('');
     const token = localStorage.getItem('access_token');
     const [loading, setLoading] = useState(false);
+
+    //States for PDF Preview Modal (shared by both request form and result form)
+    const [showPdfPreviewModal, setShowPdfPreviewModal] = useState(false);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+    const [pdfPreviewTitle, setPdfPreviewTitle] = useState('');
+    const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
 
     //Set current page due to paginations from back end
     const [currentPage, setCurrentPage] = useState(1);
@@ -164,99 +170,72 @@ export function PatientTestAndResultReports() {
         });
     };
 
-    //Handle the download of test request form
-    const handlePreviewLabTestRequestPdf = async (visitId) => {
+    //Close PDF preview modal and revoke blob URL to avoid memory leaks
+    const closePdfPreviewModal = () => {
+        setShowPdfPreviewModal(false);
+        setPdfPreviewLoading(false);
+        if (pdfPreviewUrl) {
+            URL.revokeObjectURL(pdfPreviewUrl);
+            setPdfPreviewUrl(null);
+        }
+        setPdfPreviewTitle('');
+    };
+
+    //Shared helper: fetch a PDF blob from an endpoint and open in the preview modal
+    const openPdfPreview = async (endpoint, visitId, title) => {
         if (!visitId) {
             toast.error("Visit ID not found");
             return;
         }
 
-        try {
-            setLoading(true);
+        // Open the modal immediately with a loading spinner
+        setPdfPreviewUrl(null);
+        setPdfPreviewTitle(title);
+        setPdfPreviewLoading(true);
+        setShowPdfPreviewModal(true);
 
+        try {
             const response = await axios.post(
-                `${API_BASE_URL}tests/generatePatientLabTestRequestForm`,
+                `${API_BASE_URL}${endpoint}`,
                 { visit_id: visitId },
                 {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { Authorization: `Bearer ${token}` },
                     responseType: "blob",
                 }
             );
 
-            // Create blob
             const file = new Blob([response.data], { type: "application/pdf" });
-
-            // Create blob URL
-            const fileURL = URL.createObjectURL(file);
-
-            // Preview PDF in new tab
-            window.open(fileURL, "_blank");
-
-            // Cleanup after some time
-            setTimeout(() => URL.revokeObjectURL(fileURL), 60000); // 1 minute
-
+            const url = URL.createObjectURL(file);
+            setPdfPreviewUrl(url);
         } catch (error) {
             console.error("Error generating PDF:", error);
-            toast.error("Failed to generate test request form");
+            toast.error("Failed to generate PDF");
+            closePdfPreviewModal();
         } finally {
-            setLoading(false);
+            setPdfPreviewLoading(false);
         }
     };
 
-    //Handle thefunction to download test result form
-    //tests/generatePatientTestResultForm
-    const handleDownloadOfTestResultForm = async (visitId) => {
-        if (!visitId) {
-            toast.error("Visit ID not found");
-            return;
-        }
+    //Handle the download of test request form
+    const handlePreviewLabTestRequestPdf = (visitId) => {
+        openPdfPreview('tests/generatePatientLabTestRequestForm', visitId, 'Test Request Form');
+    };
 
-        try {
-            setLoading(true);
-
-            const response = await axios.post(
-                `${API_BASE_URL}tests/generatePatientTestResultForm`,
-                { visit_id: visitId },
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                    responseType: "blob",
-                }
-            );
-
-            // Create blob
-            const file = new Blob([response.data], { type: "application/pdf" });
-
-            // Create blob URL
-            const fileURL = URL.createObjectURL(file);
-
-            // Preview PDF in new tab
-            window.open(fileURL, "_blank");
-
-            // Cleanup after some time
-            setTimeout(() => URL.revokeObjectURL(fileURL), 60000); // 1 minute
-
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            toast.error("Failed to generate test result form");
-        } finally {
-            setLoading(false);
-        }
+    //Handle the function to download test result form
+    const handleDownloadOfTestResultForm = (visitId) => {
+        openPdfPreview('tests/generatePatientTestResultForm', visitId, 'Test Result Form');
     };
 
     return (
         <>
             <ToastContainer />
-            <div className="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mt-5 dark:bg-gradient-to-br dark:from-purple-900 dark:via-blue-900 dark:to-black">
+            <div className="rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900 mt-5 bg-gradient-to-br from-sky-50 via-indigo-50 to-violet-100 dark:bg-gradient-to-br dark:from-violet-950 dark:via-indigo-900 dark:to-teal-950">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex flex-col gap-2 mb-4">
                         <div className="flex items-center gap-3">
                             <HandCoins className="w-8 h-8 text-blue-600" />
                             <h1 className="text-black-900 font-bold dark:text-white text-2xl md:text-[30px]">
-                                Patient Lab Tests and Lab Results Reporting
+                                Patient Lab Tests and Results Reporting
                             </h1>
                         </div>
 
@@ -413,29 +392,32 @@ export function PatientTestAndResultReports() {
                             ) : (
                                 filteredLabTestReports.map((visit) => (
                                     <React.Fragment key={visit.visit_details?.id}>
-                                        {/* MAIN ROW - ONE PER VISIT */}
-                                        <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                                        {/* MAIN ROW — click anywhere to expand/collapse */}
+                                        <tr
+                                            className="hover:bg-blue-50/40 dark:hover:bg-gray-800 transition cursor-pointer select-none"
+                                            onClick={() => toggleRow(visit.visit_details?.id)}
+                                        >
                                             <td className="px-4 py-3">
-                                                <div className="font-medium text-gray-900 dark:text-gray-100">
+                                                <div className="font-semibold text-gray-900 dark:text-gray-100">
                                                     {visit.patient?.name}
                                                 </div>
-                                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                                     {visit.patient?.patient_number}
                                                 </div>
                                             </td>
 
-                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 text-sm">
                                                 {formatDate(visit.visit_details?.visit_date)}
                                             </td>
 
-                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 text-sm font-mono">
                                                 {visit.visit_details?.visit_number}
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <span className={`inline-flex px-2 py-1 text-xs rounded-md ${visit.visit_details?.visit_type === 'InPatient'
-                                                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
-                                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                                                <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${visit.visit_details?.visit_type === 'InPatient'
+                                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                                                     }`}>
                                                     {visit.visit_details?.visit_type}
                                                 </span>
@@ -443,297 +425,289 @@ export function PatientTestAndResultReports() {
 
                                             <td className="px-4 py-3">
                                                 {visit.lab_tests && visit.lab_tests.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1 max-w-md">
+                                                    <div className="flex flex-wrap gap-1 max-w-xs">
                                                         {visit.lab_tests.map((test) => (
                                                             <span
                                                                 key={test.test_id}
-                                                                className="inline-flex px-2 py-1 text-xs rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300"
+                                                                className="inline-flex px-2 py-0.5 text-xs rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800"
                                                             >
                                                                 {test.test_info?.test_name}
                                                             </span>
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-400 text-xs">No tests</span>
+                                                    <span className="text-gray-400 text-xs italic">No tests</span>
                                                 )}
                                             </td>
 
                                             <td className="px-4 py-3">
                                                 {visit.lab_tests && visit.lab_tests.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1 max-w-md">
+                                                    <div className="flex flex-wrap gap-1 max-w-xs">
                                                         {visit.lab_tests.map((test) => (
                                                             <span
                                                                 key={test.test_id}
-                                                                className={`inline-flex px-2 py-1 text-xs text-gray-700 dark:text-gray-300  rounded-md ${getStatusColor(test.test_status?.id)}`}
+                                                                className={`inline-flex px-2 py-0.5 text-xs rounded-md ${getStatusColor(test.test_status?.id)}`}
                                                             >
                                                                 {test.test_status?.name}
                                                             </span>
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-400 text-xs">No tests</span>
+                                                    <span className="text-gray-400 text-xs italic">No tests</span>
                                                 )}
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 font-semibold">
+                                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold">
                                                     {visit.lab_tests?.length || 0}
                                                 </span>
                                             </td>
 
-
-
                                             <td className="px-4 py-3 text-right">
-                                                <button
-                                                    onClick={() => toggleRow(visit.visit_details?.id)}
-                                                    className="inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-600 dark:text-gray-400"
-                                                >
+                                                <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                                                     {expandedRows.has(visit.visit_details?.id) ? (
                                                         <ChevronUp className="w-4 h-4" />
                                                     ) : (
                                                         <ChevronDown className="w-4 h-4" />
                                                     )}
-                                                </button>
+                                                </div>
                                             </td>
                                         </tr>
 
                                         {/* EXPANDED ROW */}
                                         {expandedRows.has(visit.visit_details?.id) && (
                                             <tr>
-                                                <td colSpan={8} className="bg-gray-50 dark:bg-gray-800 px-6 py-6">
-                                                     {/* ACTIONS SECTION */}
-                                                    <div className="mb-6">
-                                                        <h4 className="text-2xl text-center font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                           Actions
-                                                        </h4>
+                                                <td colSpan={8} className="p-0 bg-slate-50 dark:bg-gray-800/50">
+                                                    <div className="border-t-2 border-blue-400 dark:border-blue-600">
 
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-
-                                                            {/* Handle the button that downloads the Lab test request form */}
+                                                        {/* ── ACTIONS BAR ── */}
+                                                        <div className="px-6 py-3 bg-gradient-to-r from-sky-50 to-indigo-50 dark:from-sky-900/20 dark:to-indigo-900/20 border-b border-slate-200 dark:border-gray-700 flex flex-wrap items-center gap-3">
+                                                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">
+                                                                Documents
+                                                            </span>
                                                             <button
-                                                                onClick={() =>
-                                                                    handlePreviewLabTestRequestPdf(visit.visit_details?.id)
-                                                                }
-                                                                className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-sky-100 text-sky-700
-                                                                dark:bg-sky-900/30 dark:text-sky-300
-                                                                hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
+                                                                onClick={(e) => { e.stopPropagation(); handlePreviewLabTestRequestPdf(visit.visit_details?.id); }}
+                                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 text-white hover:bg-sky-700 dark:bg-sky-700 dark:hover:bg-sky-600 transition shadow-sm"
                                                             >
+                                                                <FileText className="w-3.5 h-3.5" />
                                                                 View Test Request Form
                                                             </button>
-
-
-
-                                                            {/* Button download Test Result Form */}
-                    
-                                                                <button
-                                                                    onClick={() =>
-                                                                        handleDownloadOfTestResultForm(visit.visit_details?.id)
-                                                                    }
-                                                                    className="px-3 py-2 text-xs font-bold rounded-lg
-                                                                bg-sky-100 text-sky-700
-                                                                dark:bg-sky-900/30 dark:text-sky-300
-                                                                hover:bg-sky-200 dark:hover:bg-sky-900/50 transition"
-                                                                >
-                                                                    View Test Result Form
-                                                                </button>
-                                                           
-
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDownloadOfTestResultForm(visit.visit_details?.id); }}
+                                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 transition shadow-sm"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" />
+                                                                View Test Result Form
+                                                            </button>
                                                         </div>
-                                                    </div>
 
-                                                    {/* PATIENT & VISIT DETAILS */}
-                                                    <div className="mb-6">
-                                                        <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                                                            Patient & Visit Information
-                                                        </h4>
+                                                        <div className="px-6 py-5 space-y-6">
 
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            {/* PATIENT CARD */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h5 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Patient Details
-                                                                </h5>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Name:</span> {visit.patient?.name || "N/A"}</p>
-                                                                    <p><span className="font-medium">Patient No:</span> {visit.patient?.patient_number || "N/A"}</p>
-                                                                    <p><span className="font-medium">Email:</span> {visit.patient?.email || "N/A"}</p>
-                                                                    <p><span className="font-medium">Phone:</span> {visit.patient?.phone_number || "N/A"}</p>
-                                                                    <p><span className="font-medium">Address:</span> {visit.patient?.address || "N/A"}</p>
-                                                                    <p><span className="font-medium">District:</span> {visit.patient?.district || "N/A"}</p>
-                                                                    <p><span className="font-medium">Insurance:</span> {visit.patient?.insurance?.provider || "N/A"}</p>
-                                                                    <p><span className="font-medium">Insurance No:</span> {visit.patient?.insurance?.number || "N/A"}</p>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Visit Details */}
-                                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                                                                <h5 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                    Visit Details
-                                                                </h5>
-
-                                                                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                    <p><span className="font-medium">Visit Number:</span> {visit.visit_details?.visit_number || "N/A"}</p>
-                                                                    <p><span className="font-medium">Visit Type:</span> {visit.visit_details?.visit_type || "N/A"}</p>
-                                                                    <p><span className="font-medium">Visit Date:</span> {visit.visit_details?.visit_date || "N/A"}</p>
-                                                                    <p><span className="font-medium">Created By:</span> {visit.visit_details?.created_by || "N/A"}</p>
-                                                                    <p><span className="font-medium">Doctor:</span> {visit.visit_details?.doctor || "N/A"}</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* ALL TESTS FOR THIS VISIT */}
-                                                    <div className="mt-6">
-                                                        <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                                                            Lab Tests ({visit.lab_tests?.length || 0})
-                                                        </h4>
-
-                                                        {visit.lab_tests && visit.lab_tests.length > 0 ? (
-                                                            <div className="space-y-6">
-                                                                {visit.lab_tests.map((labTest) => (
-                                                                    <div
-                                                                        key={labTest.test_id}
-                                                                        className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5"
-                                                                    >
-                                                                        {/* TEST HEADER */}
-                                                                        <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-                                                                            <div>
-                                                                                <h5 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                                                                    {labTest.test_info?.test_name}
-                                                                                </h5>
-                                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                                                    Test ID: {labTest.test_id}
-                                                                                </p>
-                                                                            </div>
-                                                                            <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
-                                                                                {labTest.test_status?.name || "N/A"}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* TEST & SPECIMEN INFO GRID */}
-                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                                            {/* TEST INFO */}
-                                                                            <div>
-                                                                                <h6 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">
-                                                                                    Test Information
-                                                                                </h6>
-                                                                                <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                                                                                    <p><span className="font-medium">Purpose:</span> {labTest.test_info?.purpose || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Description:</span> {labTest.test_info?.description || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Method Used:</span> {labTest.test_info?.method_used || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Accepted By:</span> {labTest.test_info?.accepted_by || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Time Accepted:</span> {labTest.test_info?.time_accepted || "N/A"}</p>
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* SPECIMEN INFO */}
-                                                                            <div>
-                                                                                <h6 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">
-                                                                                    Specimen Information
-                                                                                </h6>
-                                                                                <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                                                                                    <p><span className="font-medium">Type:</span> {labTest.specimen?.type || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Barcode:</span> {labTest.specimen?.barcode || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Collected By:</span> {labTest.specimen?.collected_by || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Collected At:</span> {labTest.specimen?.collected_at || "N/A"}</p>
-                                                                                    <p><span className="font-medium">Acceptance:</span> {labTest.specimen?.sample_acceptance || "N/A"}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {/* TEST RESULTS */}
-                                                                        <div className="mt-4">
-                                                                            <h6 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">
-                                                                                Test Results ({labTest.results?.length || 0})
-                                                                            </h6>
-
-                                                                            {labTest.results && labTest.results.length > 0 ? (
-                                                                                <div className="space-y-3">
-                                                                                    {labTest.results.map((result, idx) => {
-                                                                                        const parameter = result.snapshot?.parameter_used;
-                                                                                        const testResult = result.snapshot?.test_result;
-                                                                                        const isNumeric = parameter?.result_type === "numeric";
-
-                                                                                        return (
-                                                                                            <div
-                                                                                                key={`${labTest.test_id}-${result.parameter_id}-${idx}`}
-                                                                                                className="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
-                                                                                            >
-                                                                                                {/* PARAMETER HEADER */}
-                                                                                                <div className="flex items-start justify-between mb-3">
-                                                                                                    <div>
-                                                                                                        <h6 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                                                                                            {parameter?.name || "Unknown Parameter"}
-                                                                                                        </h6>
-                                                                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                                                            Type: {parameter?.result_type || "N/A"}
-                                                                                                        </p>
-                                                                                                    </div>
-                                                                                                </div>
-
-                                                                                                {/* RESULT VALUE */}
-                                                                                                <div className="mb-3">
-                                                                                                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                                                                                        Result Value
-                                                                                                    </p>
-                                                                                                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                                                                                                        {result.value || testResult?.result_value} {parameter?.si_unit || ''}
-                                                                                                    </p>
-
-                                                                                                    <p
-                                                                                                        className={`mt-1 text-xs font-medium ${(result.interpretation || testResult?.interpretation) === "High"
-                                                                                                            ? "text-red-600 dark:text-red-400"
-                                                                                                            : (result.interpretation || testResult?.interpretation) === "Low"
-                                                                                                                ? "text-yellow-600 dark:text-yellow-400"
-                                                                                                                : "text-green-600 dark:text-green-400"
-                                                                                                            }`}
-                                                                                                    >
-                                                                                                        Interpretation: {result.interpretation || testResult?.interpretation || "—"}
-                                                                                                    </p>
-                                                                                                </div>
-
-                                                                                                {/* NUMERIC DETAILS */}
-                                                                                                {isNumeric && (
-                                                                                                    <div className="mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                                                                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                                                                                            Reference Range
-                                                                                                        </p>
-                                                                                                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                                                                                                            {parameter?.reference_range || `${parameter?.normal_min} - ${parameter?.normal_max}`} {parameter?.si_unit || ''}
-                                                                                                        </p>
-                                                                                                    </div>
-                                                                                                )}
-
-                                                                                                {/* AUDIT TRAIL */}
-                                                                                                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                                                    <p><span className="font-medium">Instrument:</span> {result.instrument || "N/A"}</p>
-                                                                                                    <p><span className="font-medium">Entered By:</span> {result.result_entered_by || "N/A"}</p>
-                                                                                                    <p><span className="font-medium">Verified By:</span> {result.result_verified_by || "Not Verified"}</p>
-                                                                                                    <p><span className="font-medium">Time Entered:</span> {result.time_entered || "N/A"}</p>
-                                                                                                    <p><span className="font-medium">Time Verified:</span> {result.time_verified || "N/A"}</p>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                                                    No results recorded for this test
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
+                                                            {/* ── PATIENT & VISIT CARDS ── */}
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                {/* PATIENT CARD */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                                                                    <div className="px-4 py-2.5 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/30 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                                                                        <User className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                                                                        <h5 className="text-xs font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wider">Patient Details</h5>
                                                                     </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-center py-8 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                                                                No lab tests recorded for this visit
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                                    <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                                                                        {[
+                                                                            ['Name', visit.patient?.name],
+                                                                            ['Patient No', visit.patient?.patient_number],
+                                                                            ['Email', visit.patient?.email],
+                                                                            ['Phone', visit.patient?.phone_number],
+                                                                            ['Address', visit.patient?.address],
+                                                                            ['District', visit.patient?.district],
+                                                                            ['Insurance', visit.patient?.insurance?.provider],
+                                                                            ['Insurance No', visit.patient?.insurance?.number],
+                                                                        ].map(([label, value]) => (
+                                                                            <div key={label}>
+                                                                                <dt className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wide">{label}</dt>
+                                                                                <dd className="font-semibold text-gray-800 dark:text-gray-200 mt-0.5 truncate">{value || 'N/A'}</dd>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
 
+                                                                {/* VISIT CARD */}
+                                                                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                                                                    <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/20 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                                                                        <Stethoscope className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                                        <h5 className="text-xs font-bold text-gray-800 dark:text-gray-100 uppercase tracking-wider">Visit Details</h5>
+                                                                    </div>
+                                                                    <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                                                                        {[
+                                                                            ['Visit Number', visit.visit_details?.visit_number],
+                                                                            ['Visit Type', visit.visit_details?.visit_type],
+                                                                            ['Visit Date', visit.visit_details?.visit_date],
+                                                                            ['Created By', visit.visit_details?.created_by],
+                                                                            ['Doctor', visit.visit_details?.doctor],
+                                                                        ].map(([label, value]) => (
+                                                                            <div key={label}>
+                                                                                <dt className="text-gray-400 dark:text-gray-500 text-[10px] uppercase tracking-wide">{label}</dt>
+                                                                                <dd className="font-semibold text-gray-800 dark:text-gray-200 mt-0.5">{value || 'N/A'}</dd>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* ── LAB TESTS ── */}
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-3">
+                                                                    <FlaskConical className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                                                    <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wide">
+                                                                        Lab Tests
+                                                                    </h4>
+                                                                    <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                                                        {visit.lab_tests?.length || 0}
+                                                                    </span>
+                                                                </div>
+
+                                                                {visit.lab_tests && visit.lab_tests.length > 0 ? (
+                                                                    <div className="space-y-4">
+                                                                        {visit.lab_tests.map((labTest, labIdx) => (
+                                                                            <div
+                                                                                key={labTest.test_id}
+                                                                                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm"
+                                                                            >
+                                                                                {/* TEST HEADER */}
+                                                                                <div className="px-5 py-3 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/20 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 dark:bg-indigo-700 text-white text-xs font-bold flex-shrink-0">
+                                                                                            {labIdx + 1}
+                                                                                        </span>
+                                                                                        <div>
+                                                                                            <h5 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                                                                                {labTest.test_info?.test_name}
+                                                                                            </h5>
+                                                                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">ID: {labTest.test_id}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full border ${getStatusColor(labTest.test_status?.id)} border-current/20`}>
+                                                                                        {labTest.test_status?.name || 'N/A'}
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                <div className="p-5 space-y-4">
+                                                                                    {/* TEST & SPECIMEN INFO */}
+                                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                                                                                            <h6 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Test Information</h6>
+                                                                                            <dl className="space-y-1.5 text-xs">
+                                                                                                {[
+                                                                                                    ['Purpose', labTest.test_info?.purpose],
+                                                                                                    ['Description', labTest.test_info?.description],
+                                                                                                    ['Method Used', labTest.test_info?.method_used],
+                                                                                                    ['Accepted By', labTest.test_info?.accepted_by],
+                                                                                                    ['Time Accepted', labTest.test_info?.time_accepted],
+                                                                                                ].map(([label, val]) => (
+                                                                                                    <div key={label} className="flex gap-2">
+                                                                                                        <dt className="text-gray-400 dark:text-gray-500 shrink-0 w-24">{label}:</dt>
+                                                                                                        <dd className="font-medium text-gray-700 dark:text-gray-300">{val || 'N/A'}</dd>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </dl>
+                                                                                        </div>
+                                                                                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                                                                                            <h6 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Specimen Information</h6>
+                                                                                            <dl className="space-y-1.5 text-xs">
+                                                                                                {[
+                                                                                                    ['Type', labTest.specimen?.type],
+                                                                                                    ['Barcode', labTest.specimen?.barcode],
+                                                                                                    ['Collected By', labTest.specimen?.collected_by],
+                                                                                                    ['Collected At', labTest.specimen?.collected_at],
+                                                                                                    ['Acceptance', labTest.specimen?.sample_acceptance],
+                                                                                                ].map(([label, val]) => (
+                                                                                                    <div key={label} className="flex gap-2">
+                                                                                                        <dt className="text-gray-400 dark:text-gray-500 shrink-0 w-24">{label}:</dt>
+                                                                                                        <dd className="font-medium text-gray-700 dark:text-gray-300">{val || 'N/A'}</dd>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </dl>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* RESULTS TABLE */}
+                                                                                    <div>
+                                                                                        <div className="flex items-center gap-2 mb-2">
+                                                                                            <TestTube2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                                                                                            <h6 className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                                                Results ({labTest.results?.length || 0})
+                                                                                            </h6>
+                                                                                        </div>
+
+                                                                                        {labTest.results && labTest.results.length > 0 ? (
+                                                                                            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                                                                                <table className="w-full text-xs">
+                                                                                                    <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                                                                                        <tr>
+                                                                                                            {['Parameter', 'Type', 'Result', 'Unit', 'Ref. Range', 'Interpretation', 'Instrument', 'Entered By', 'Verified By', 'Time Entered', 'Time Verified'].map(h => (
+                                                                                                                <th key={h} className="px-3 py-2 text-left text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                                                                                                                    {h}
+                                                                                                                </th>
+                                                                                                            ))}
+                                                                                                        </tr>
+                                                                                                    </thead>
+                                                                                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                                                                                        {labTest.results.map((result, idx) => {
+                                                                                                            const parameter = result.snapshot?.parameter_used;
+                                                                                                            const testResult = result.snapshot?.test_result;
+                                                                                                            const isNumeric = parameter?.result_type === "numeric";
+                                                                                                            const interp = result.interpretation || testResult?.interpretation;
+                                                                                                            return (
+                                                                                                                <tr
+                                                                                                                    key={`${labTest.test_id}-${result.parameter_id}-${idx}`}
+                                                                                                                    className="bg-white dark:bg-gray-900 even:bg-gray-50/60 even:dark:bg-gray-800/30"
+                                                                                                                >
+                                                                                                                    <td className="px-3 py-2 font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                                                                                                                        {parameter?.name || '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
+                                                                                                                        {parameter?.result_type || '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className="px-3 py-2 font-bold text-gray-900 dark:text-white">
+                                                                                                                        {result.value || testResult?.result_value || '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
+                                                                                                                        {parameter?.si_unit || '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                                                                                                        {isNumeric ? (parameter?.reference_range || `${parameter?.normal_min} – ${parameter?.normal_max}`) : '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className={`px-3 py-2 font-bold whitespace-nowrap ${interp === 'High' ? 'text-red-600 dark:text-red-400' : interp === 'Low' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                                                                                        {interp || '—'}
+                                                                                                                    </td>
+                                                                                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{result.instrument || '—'}</td>
+                                                                                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{result.result_entered_by || '—'}</td>
+                                                                                                                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{result.result_verified_by || 'Not Verified'}</td>
+                                                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">{result.time_entered || '—'}</td>
+                                                                                                                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">{result.time_verified || '—'}</td>
+                                                                                                                </tr>
+                                                                                                            );
+                                                                                                        })}
+                                                                                                    </tbody>
+                                                                                                </table>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <div className="text-center py-4 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-200 dark:border-gray-700">
+                                                                                                No results recorded for this test
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-center py-8 text-sm text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-900 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                                                                        No lab tests recorded for this visit
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )}
@@ -776,6 +750,57 @@ export function PatientTestAndResultReports() {
                     </div>
                 </div>
             </div>
+
+            {/* ── PDF PREVIEW MODAL ── */}
+            {/* Shared by both "View Test Request Form" and "View Test Result Form" buttons */}
+            {showPdfPreviewModal && (
+                <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-3
+                        bg-white dark:bg-gray-900
+                        border-b border-gray-200 dark:border-gray-700
+                        flex-shrink-0">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                            {pdfPreviewTitle}
+                        </h3>
+                        <div className="flex items-center gap-3">
+                            {pdfPreviewUrl && (
+                                <a
+                                    href={pdfPreviewUrl}
+                                    download={`${pdfPreviewTitle}.pdf`}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    Download
+                                </a>
+                            )}
+                            <button
+                                onClick={closePdfPreviewModal}
+                                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-lg font-bold leading-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Body */}
+                    <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                        {pdfPreviewLoading ? (
+                            <div className="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400">
+                                <RefreshCw className="w-8 h-8 animate-spin text-sky-500" />
+                                <span className="text-sm">Generating PDF&hellip;</span>
+                            </div>
+                        ) : pdfPreviewUrl ? (
+                            <iframe
+                                src={pdfPreviewUrl}
+                                title={pdfPreviewTitle}
+                                className="w-full h-full border-0"
+                                style={{ minHeight: 0 }}
+                            />
+                        ) : null}
+                    </div>
+                </div>
+            )}
         </>
     );
 }

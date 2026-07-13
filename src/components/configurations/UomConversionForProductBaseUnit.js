@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
+import AsyncSelect from 'react-select/async';
 import axios from "axios";
 import { API_BASE_URL } from "../general/constants";
 import { toast, ToastContainer } from "react-toastify";
@@ -7,15 +8,17 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
 //Import apis from the helper
-import { fetchProductsItems } from "../products/products_helper";
+import { fetchProductsForAsyncSelect } from "../products/products_helper";
 import { fetchUoms } from "../products/products_helper";
+import { getSelectClassNames } from "../general/searchSelectStyles";
 
 
 export default function UomConversionForProductBaseUnit() {
 
     const [conversions, setConversions] = useState([]);
-    const [products, setProducts] = useState([]);
+    const [selectedProductOption, setSelectedProductOption] = useState(null);
     const [uoms, setUoms] = useState([]);
+    const productDebounceRef = useRef(null);
 
     const [searchProduct, setSearchProduct] = useState('');
     const [loading, setLoading] = useState(true);
@@ -44,7 +47,7 @@ export default function UomConversionForProductBaseUnit() {
     const fetchConversions = async () => {
         try {
             const res = await axios.get(
-                `${API_BASE_URL}items/getUOMConversionsForProductBaseUnit`,
+                `${API_BASE_URL}items/getUOMConversionsForProducts`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -80,14 +83,13 @@ export default function UomConversionForProductBaseUnit() {
         }
     };
 
-    // Load products using the helper
-    const loadProducts = async () => {
-        setLoading(true);
-        const data = await fetchProductsItems(token);
-        console.log(products)
-        setProducts(data);
-        setLoading(false);
-    };
+    const loadProductOptions = (inputValue) =>
+        new Promise((resolve) => {
+            if (productDebounceRef.current) clearTimeout(productDebounceRef.current);
+            productDebounceRef.current = setTimeout(() => {
+                fetchProductsForAsyncSelect(token, inputValue).then(resolve);
+            }, 350);
+        });
 
     //Load uoms using the helper
     const loadUoms = async () => {
@@ -99,7 +101,6 @@ export default function UomConversionForProductBaseUnit() {
     };
 
     useEffect(() => {
-        loadProducts();
         loadUoms();
         fetchConversions();
     }, [token]);
@@ -153,6 +154,7 @@ export default function UomConversionForProductBaseUnit() {
     const handleAdd = () => {
         setModalMode('add');
         setFormData({ product_name: '', unit_of_measure_name: '', multiplier: '' });
+        setSelectedProductOption(null);
         setIsModalOpen(true);
     };
 
@@ -542,29 +544,18 @@ export default function UomConversionForProductBaseUnit() {
                                         <label className="block text-gray-700 dark:text-gray-300 mb-2">
                                             Product Name
                                         </label>
-                                        <select
-                                            value={formData.product_name}
-                                            onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-                                            className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 max-h-40 overflow-y-auto"
-                                        >
-                                            <option value="">Select a product</option>
-                                            {/* Append variants alongside their product names */}
-                                            {products.map((p) => {
-                                                // Build variant string: "strength: 1g, packaging: Blister Pack, size: Medium"
-                                                const variantText = p.variant_options && p.variant_options.length > 0
-                                                    ? p.variant_options
-                                                        .map(v => `${v.option_name}: ${v.option_value}`)
-                                                        .join(", ")
-                                                    : "No variants";
-
-                                                return (
-                                                    <option key={p.id} value={p.id}>
-                                                        {p.name} — ({variantText})
-                                                    </option>
-                                                );
-                                            })}
-
-                                        </select>
+                                        <AsyncSelect
+                                            loadOptions={loadProductOptions}
+                                            defaultOptions
+                                            value={selectedProductOption}
+                                            onChange={(option) => {
+                                                setSelectedProductOption(option);
+                                                setFormData({ ...formData, product_name: option ? option.value : '' });
+                                            }}
+                                            classNames={getSelectClassNames()}
+                                            isClearable
+                                            placeholder="Search product..."
+                                        />
                                     </div>
                                 )}
 
