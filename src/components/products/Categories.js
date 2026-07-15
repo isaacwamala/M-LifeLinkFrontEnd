@@ -17,14 +17,14 @@ function Categories() {
     const [categories, setCategories] = useState([]); //initialize state 
 
     //Use product categories from the products helper
-    useEffect(() => {
-        const loadCategories = async () => {
-            setLoading(true);
-            const data = await fetchProductCategories(token);
-            setCategories(data);
-            setLoading(false);
-        };
+    const loadCategories = async () => {
+        setLoading(true);
+        const data = await fetchProductCategories(token);
+        setCategories(data);
+        setLoading(false);
+    };
 
+    useEffect(() => {
         loadCategories();
     }, [token]);
 
@@ -132,6 +132,7 @@ function Categories() {
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 toast.success("Product category added successfully");
+                await loadCategories();
             } else if (modalMode === "edit" && currentCategory) {
                 await axios.post(
                     `${API_BASE_URL}config/updateCategory`,
@@ -143,9 +144,10 @@ function Categories() {
                     { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
                 );
                 toast.success("Category updated successfully");
+               await loadCategories();
             }
 
-            fetchProductCategories();
+
 
             // Reset form
             setFormData({

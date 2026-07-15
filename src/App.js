@@ -17,6 +17,7 @@ import Categories from "./components/products/Categories.js";
 import UnitOfMeasure from "./components/configurations/UnitOfMeasure.js";
 
 import NotificationsPage from "./components/notifications/NotificationsPage.js";
+import SendNotifications from "./components/notifications/SendNotifications.js";
 import MedicalSuppliesItems from "./components/products/MedicalSuppliesItems.js";
 import RegisterMedicalStock from "./components/products/RegisterMedicalStock.js";
 
@@ -24,6 +25,7 @@ import UomConversionForProductBaseUnit from "./components/configurations/UomConv
 
 import PurchaseOrders from "./components/purchase_orders/PurchaseOrders.js";
 import CreatePurchaseOrder from "./components/purchase_orders/CreatePurchaseOrder.js";
+import { RFQManagement } from "./components/purchase_orders/RFQManagement.js";
 import MedicalStock from "./components/products/MedicalStock.js";
 import StockAdjustments from "./components/products/StockAdjustments.js";
 import StockAdjustmentsLogs from "./components/products/StockAdjustmentLogs.js";
@@ -33,7 +35,6 @@ import SupplierPurchaseOrderPayments from "./components/suppliers_and_stock/Supp
 import StockReturns from "./components/suppliers_and_stock/StockReturns.js";
 import SupplierPaymentsOnOrders from "./components/suppliers_and_stock/SupplierPaymentsOnOrders.js";
 
-import RegisterPharmacySales from "./components/pharmacy_sales/RegisterPharmacySales.js";
 import { ViewSales } from "./components/pharmacy_sales/ViewSales.js";
 
 
@@ -51,6 +52,7 @@ import ManageSpecimenAndTheirTestTypes from "./components/lab/ManageSpecimenAndT
 
 // Lab requests
 import { CreateLabTestRequest } from "./components/lab_tests/CreateLabTestRequest.js";
+import { CreatePrescriptionRequest } from "./components/lab_tests/CreatePrescriptionRequest.js";
 import { PatientLabTestRequests } from "./components/patients/PatientLabTestRequests.js";
 import ManageTestTypeResultManager from "./components/lab/ManageTestTypeResultManager.js";
 
@@ -62,6 +64,32 @@ import { PatientMedicalPrescriptions } from "./components/pharmacy_sales/Patient
 import MedicalRoom from "./components/configurations/MedicalRoom.js"
 import DoctorAssignRooms from "./components/configurations/DoctorAssignRooms.js";
 import WardManager from "./components/configurations/WardManager.js";
+import InstrumentsManager from "./components/configurations/InstrumentsManager.js";
+import { BillingRates } from "./components/configurations/BillingRates.js";
+import { BusinessSettings } from "./components/configurations/BusinessSettings.js";
+import { Invoices } from "./components/invoicing/Invoices.js";
+import { PaymentReceipts } from "./components/invoicing/PaymentReceipts.js";
+import DepartmentStaffing from "./components/configurations/DepartmentStaffing.js";
+import WardAssignmentsBoard from "./components/configurations/WardAssignmentsBoard.js";
+import VariantOptionsManager from "./components/configurations/VariantOptionsManager.js";
+
+// Activity Logs
+import GeneralActivityLogsViewer from "./components/activitylogs/GeneralActivityLogsViewer.js";
+
+//appointments
+import AdminDashboard from "./components/dashboard/AdminDashboard.js";
+import DoctorDashboard from "./components/dashboard/DoctorDashboard.js";
+import PharmacistDashboard from "./components/dashboard/PharmacistDashboard.js";
+import LaboratoryDashboard from "./components/dashboard/LaboratoryDashboard.js";
+import ReceptionistDashboard from "./components/dashboard/ReceptionistDashboard.js";
+import AppointmentsManager from "./components/appointments/AppointmentsManager.js";
+import AppointmentsCalendar from "./components/appointments/AppointmentsCalendar.js";
+import AppointmentsToday from "./components/appointments/AppointmentsToday.js";
+import AvailableSlots from "./components/appointments/AvailableSlots.js";
+
+import RegisterPharmacySalesTwo from "./components/pharmacy_sales/RegisterPharmacySalesTwo.js"
+import { CustomerManagement } from "./components/pharmacy_sales/CustomerManagement.js"
+import { CreditInvoices } from "./components/pharmacy_sales/CreditInvoices.js"
 
 
 function App() {
@@ -77,8 +105,6 @@ function App() {
 
 
 
-
-
         {/* Dashboard wrapped with Layout */}
         <Route
           path="/*"
@@ -86,6 +112,11 @@ function App() {
             <Layout>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/administrator" element={<AdminDashboard />} />
+                <Route path="/dashboard/doctor"         element={<DoctorDashboard />} />
+                <Route path="/dashboard/pharmacist"     element={<PharmacistDashboard />} />
+                <Route path="/dashboard/laboratory"     element={<LaboratoryDashboard />} />
+                <Route path="/dashboard/receptionist"   element={<ReceptionistDashboard />} />
 
                 <Route path="/usergroups" element={<UserGroups />} />
                 <Route path="/create_account_type" element={<CreateUserGroupModal />} />
@@ -107,6 +138,7 @@ function App() {
                 <Route path="/convert_different_uoms_in_terms_of_product_base_unit" element={<UomConversionForProductBaseUnit />} />
 
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/send_notifications" element={<SendNotifications />} />
 
                 {/* Medical supply item */}
                 <Route path="/categories" element={<Categories />} />
@@ -119,6 +151,7 @@ function App() {
                 {/* Purchase orders */}
                 <Route path="/purchase_orders" element={<PurchaseOrders />} />
                 <Route path="/create_purchase_order" element={<CreatePurchaseOrder />} />
+                <Route path="/rfqs" element={<RFQManagement />} />
                 <Route path="/supplier/order_payments" element={<SupplierPurchaseOrderPayments />} />
                 <Route path="/supplier/order_payments/analysis" element={<SupplierPaymentsOnOrders />} />
 
@@ -131,7 +164,11 @@ function App() {
                 <Route path="/inventory" element={<MainInventoryTrack />} />
 
                 {/* Pharmacy sales */}
-                <Route path="/register_pharmacy_sales" element={<RegisterPharmacySales />} />
+            
+                <Route path="/pharmacy_pos_terminal" element={<RegisterPharmacySalesTwo />} />
+                <Route path="/customer_management" element={<CustomerManagement />} />
+                <Route path="/credit_invoices" element={<CreditInvoices />} />
+
                 <Route path="/pharmacy_sales" element={<ViewSales />} />
 
                 {/* Patients */}
@@ -152,6 +189,7 @@ function App() {
 
                 {/* Create Lab Test Requests */}
                 <Route path="/visits/:visitId/lab-tests/create" element={<CreateLabTestRequest />} />
+                <Route path="/visits/:visitId/prescription/create" element={<CreatePrescriptionRequest />} />
                 <Route path="/patient_lab/test/requests" element={<PatientLabTestRequests />} />
 
                 {/* Set up test types result parameters */}
@@ -165,6 +203,23 @@ function App() {
                 <Route path="/medical_rooms" element={<MedicalRoom />} />
                 <Route path="/doctor/rooms/assignments" element={<DoctorAssignRooms />} />
                 <Route path="/ward_manager" element={<WardManager />} />
+                <Route path="/lab_instruments" element={<InstrumentsManager />} />
+                <Route path="/billing_rates" element={<BillingRates />} />
+                <Route path="/business_settings" element={<BusinessSettings />} />
+                <Route path="/invoices" element={<Invoices />} />
+                <Route path="/payment_receipts" element={<PaymentReceipts />} />
+                <Route path="/department_staffing" element={<DepartmentStaffing />} />
+                <Route path="/ward_assignments_board" element={<WardAssignmentsBoard />} />
+                <Route path="/variant_options_manager" element={<VariantOptionsManager />} />
+
+                {/* Activity Logs */}
+                <Route path="/activity_logs" element={<GeneralActivityLogsViewer />} />
+
+                //Appointments
+                <Route path="/appointments/management" element={<AppointmentsManager />} />
+                <Route path="/appointments/calendar" element={<AppointmentsCalendar />} />
+                <Route path="/appointments/today" element={<AppointmentsToday />} />
+                <Route path="/appointments/available_slots" element={<AvailableSlots />} />
 
 
               </Routes>

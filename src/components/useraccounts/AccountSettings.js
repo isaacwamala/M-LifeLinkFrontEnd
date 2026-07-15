@@ -37,7 +37,7 @@ function AccountSettings() {
       });
       const data = response.data.userDetails;
       setUserDetails({
-        role: data.role?.display_name || "",
+        role: data.roles?.map(r => r.display_name).join(', ') || "",  // "Administrator, Doctor, Pharmacist, Radiology"
         email: data.email || "",
         username: data.username || "",
         name: data.name || "",
@@ -45,7 +45,7 @@ function AccountSettings() {
         profile_image: data.profile_image || "",
       });
       setEditedInfo({
-        role: data.role?.display_name || "",
+        role: data.roles?.map(r => r.display_name).join(', ') || "",
         email: data.email || "",
         username: data.username || "",
         name: data.name || "",
@@ -164,9 +164,20 @@ function AccountSettings() {
     reader.readAsDataURL(file);
   };
 
+  if (userLoading) {
+    return (
+      <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Loading account details...</p>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
-   <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+    <div className="w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <ToastContainer />
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">

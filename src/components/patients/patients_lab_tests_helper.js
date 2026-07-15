@@ -105,6 +105,7 @@ export const fetchTestTypes = async (token) => {
             id: t.id,
             name: t.name,
             description: t.description,
+            price:t.price,
         }));
 
     } catch (error) {

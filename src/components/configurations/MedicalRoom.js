@@ -242,7 +242,6 @@ function MedicalRoom() {
 
 
 
-
     return (
         <>
             <ToastContainer />
@@ -477,7 +476,7 @@ function MedicalRoom() {
                                                         </svg>
                                                         Saving...
                                                     </>
-                                                ) : modalMode === "add" ? "Add Supplier" : "Save Changes"}
+                                                ) : modalMode === "add" ? "Add Room" : "Save Changes"}
                                             </button>
 
                                         </div>

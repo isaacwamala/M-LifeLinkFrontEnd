@@ -11,17 +11,19 @@ import {
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../general/constants';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
+import { getSelectClassNames } from '../../general/searchSelectStyles'; // adjust to wherever you put the helper
 
 // ─── Reused helpers ────────────────────────────────────────────────────────────
 
 
 const StatusBadge = ({ status }) => {
     const map = {
-        pending:   { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
-        waiting:   { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
-        ongoing:   { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
+        pending: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
+        waiting: { color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
+        ongoing: { color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
         completed: { color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-        triaged:   { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
+        triaged: { color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
     };
     const cfg = map[status] ?? map.pending;
     return (
@@ -33,9 +35,9 @@ const StatusBadge = ({ status }) => {
 
 const deptIcon = (name = '') => {
     const n = name.toLowerCase();
-    if (n.includes('lab'))                       return <FlaskConical className="w-4 h-4" />;
-    if (n.includes('pharm'))                     return <Pill className="w-4 h-4" />;
-    if (n.includes('surg'))                      return <Scissors className="w-4 h-4" />;
+    if (n.includes('lab')) return <FlaskConical className="w-4 h-4" />;
+    if (n.includes('pharm')) return <Pill className="w-4 h-4" />;
+    if (n.includes('surg')) return <Scissors className="w-4 h-4" />;
     if (n.includes('radio') || n.includes('imaging')) return <Radiation className="w-4 h-4" />;
     return <Stethoscope className="w-4 h-4" />;
 };
@@ -64,21 +66,21 @@ export function AssignVisitToDepartments({
     const navigate = useNavigate();
 
     // ── Assignment list ────────────────────────────────────────────────────────
-    const [assignments, setAssignments]           = useState([]);
+    const [assignments, setAssignments] = useState([]);
     const [loadingAssignments, setLoadingAssignments] = useState(false);
 
     // ── New assignment form ────────────────────────────────────────────────────
-    const [form, setForm]         = useState({ department_id: '', assigned_to: '', notes: '' });
+    const [form, setForm] = useState({ department_id: '', assigned_to: '', notes: '' });
     const [submitting, setSubmitting] = useState(false);
 
     // ── Inline edit ────────────────────────────────────────────────────────────
-    const [editingId, setEditingId]       = useState(null);
-    const [editForm, setEditForm]         = useState({ department_id: '' });
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ department_id: '' });
     const [editSubmitting, setEditSubmitting] = useState(false);
 
     // ── Delete confirm ─────────────────────────────────────────────────────────
-    const [confirmDeleteId, setConfirmDeleteId]   = useState(null);
-    const [deletingId, setDeletingId]             = useState(null);
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     // ── Load assignments whenever drawer opens for a visit ─────────────────────
     useEffect(() => {
@@ -120,10 +122,10 @@ export function AssignVisitToDepartments({
             await axios.post(
                 `${API_BASE_URL}visitAssign/assignVisitToDepartment`,
                 {
-                    visit_id:      visit.id,
+                    visit_id: visit.id,
                     department_id: Number(form.department_id),
-                    assigned_to:   form.assigned_to ? Number(form.assigned_to) : null,
-                    notes:         form.notes,
+                    assigned_to: form.assigned_to ? Number(form.assigned_to) : null,
+                    notes: form.notes,
                 },
                 { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
             );
@@ -193,6 +195,11 @@ export function AssignVisitToDepartments({
         }
     };
 
+    const departmentOptions = departments.map(d => ({
+        value: d.id,
+        label: d.department_name,
+    }));
+
     if (!isOpen) return null;
 
     return (
@@ -243,20 +250,19 @@ export function AssignVisitToDepartments({
                                 <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
                                     Department <span className="text-red-500">*</span>
                                 </label>
-                                <select
-                                    value={form.department_id}
-                                    onChange={e => setForm({ ...form, department_id: e.target.value })}
-                                    className={inputCls}
-                                >
-                                    <option value="">Select department</option>
-                                    {departments.map(d => (
-                                        <option key={d.id} value={d.id}>{d.department_name}</option>
-                                    ))}
-                                </select>
+                                <Select
+                                    unstyled
+                                    classNames={getSelectClassNames()}
+                                    options={departmentOptions}
+                                    value={departmentOptions.find(o => o.value === Number(form.department_id)) || null}
+                                    onChange={(opt) => setForm({ ...form, department_id: opt ? String(opt.value) : '' })}
+                                    isClearable
+                                    placeholder="Select department"
+                                />
                             </div>
 
                             {/* Assigned to (staff) */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
                                     Assign To (Staff)
                                 </label>
@@ -270,7 +276,7 @@ export function AssignVisitToDepartments({
                                         <option key={doc.id} value={doc.id}>{doc.name}</option>
                                     ))}
                                 </select>
-                            </div>
+                            </div> */}
 
                             {/* Notes */}
                             <div className="col-span-2">
@@ -475,18 +481,18 @@ export function AssignVisitToDepartments({
                                                     Change department
                                                 </p>
                                                 <div className="flex items-center gap-2">
-                                                    <select
-                                                        value={editForm.department_id}
-                                                        onChange={e => setEditForm({ department_id: e.target.value })}
-                                                        className="flex-1 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-800
-                                                            text-gray-800 dark:text-white border border-indigo-300 dark:border-indigo-600
-                                                            focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                                    >
-                                                        <option value="">Select department</option>
-                                                        {departments.map(d => (
-                                                            <option key={d.id} value={d.id}>{d.department_name}</option>
-                                                        ))}
-                                                    </select>
+                                                    <Select
+                                                        unstyled
+                                                        classNames={getSelectClassNames()}
+                                                        options={departmentOptions}
+                                                        value={departmentOptions.find(o => o.value === Number(editForm.department_id)) || null}
+                                                        onChange={(opt) => setEditForm({ department_id: opt ? String(opt.value) : '' })}
+                                                        className="flex-1"
+                                                        classNamePrefix="react-select"
+                                                        placeholder="Select department"
+                                                        menuPortalTarget={document.body}
+                                                        styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+                                                    />
                                                     <button
                                                         onClick={() => handleUpdate(assignment.id)}
                                                         disabled={editSubmitting}

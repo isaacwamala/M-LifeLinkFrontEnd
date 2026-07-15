@@ -166,7 +166,7 @@ export function AddTriageToPatientVisit({ isOpen, onClose, visit, token, onSucce
             };
 
             const res = await axios.post(
-                `${API_BASE_URL}visitAssign/addPatientVisitTriage`,
+                `${API_BASE_URL}visitAssign/registerPatientVisitTriage`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' } }
             );

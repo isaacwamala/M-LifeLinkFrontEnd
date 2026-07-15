@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Package, Calendar, DollarSign, Hash, Tag, Plus, Trash2, AlertCircle, ShoppingCart, X } from 'lucide-react';
-import { fetchProductsItems } from '../products/products_helper';
+import AsyncSelect from 'react-select/async';
+import { fetchProductsForAsyncSelect } from '../products/products_helper';
 import { fetchUoms } from '../products/products_helper';
 import { fetchSuppliers } from '../products/products_helper';
+import { getSelectClassNames } from '../general/searchSelectStyles';
 import { toast, ToastContainer } from 'react-toastify';
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton"
 import "react-loading-skeleton/dist/skeleton.css";
@@ -16,7 +18,7 @@ export default function CreatePurchaseOrder() {
 
     const [showModal, setShowModal] = useState(false);
     const [modalMessage, setModalMessage] = useState({ product: '', uom: '' });
-    const [products, setProducts] = useState([]);
+    const [itemProductOptions, setItemProductOptions] = useState([null]);
     const [uoms, setUoms] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
     const token = localStorage.getItem('access_token');
@@ -27,6 +29,15 @@ export default function CreatePurchaseOrder() {
         new Date().toISOString().split('T')[0]
     );
     const navigate = useNavigate();
+
+    const productDebounceRef = useRef(null);
+    const loadProductOptions = (inputValue) =>
+        new Promise((resolve) => {
+            if (productDebounceRef.current) clearTimeout(productDebounceRef.current);
+            productDebounceRef.current = setTimeout(() => {
+                fetchProductsForAsyncSelect(token, inputValue).then(resolve);
+            }, 350);
+        });
 
     //New state that pbserves aproduct  missing aconversion set
     const [conversionMissing, setConversionMissing] = useState(false);
@@ -76,14 +87,7 @@ export default function CreatePurchaseOrder() {
         console.log('suppliers', data);
         setSuppliers(data);
     };
-    //fetch products
-    const loadProducts = async () => {
-        const data = await fetchProductsItems(token);
-        setProducts(data);
-    };
-
     useEffect(() => {
-        loadProducts();
         loadUoms();
         loadSuppliers();
         fetchProductsWithTheirUomConversions();
@@ -99,11 +103,13 @@ export default function CreatePurchaseOrder() {
                 unit_price: '',
             },
         ]);
+        setItemProductOptions(prev => [...prev, null]);
     };
 
     const removeItem = (index) => {
         if (items.length > 1) {
             setItems(items.filter((_, i) => i !== index));
+            setItemProductOptions(prev => prev.filter((_, i) => i !== index));
         }
     };
 
@@ -205,6 +211,7 @@ export default function CreatePurchaseOrder() {
                     unit_price: "",
                 },
             ]);
+            setItemProductOptions([null]);
 
         } catch (error) {
             console.error("Error submitting:", error);
@@ -239,11 +246,10 @@ export default function CreatePurchaseOrder() {
         );
 
         if (!hasConversion) {
-            const p = products.find(pr => pr.id.toString() === product_id.toString());
             const u = uoms.find(um => um.id.toString() === unit_of_measure.toString());
 
             setModalMessage({
-                product: p?.name || "",
+                product: itemProductOptions[index]?.label || "",
                 uom: u?.name || ""
             });
 
@@ -393,33 +399,20 @@ export default function CreatePurchaseOrder() {
                                                     <label className="block text-black-700 font-bold dark:text-gray-300 mb-2">
                                                         Product <span className="text-red-500">*</span>
                                                     </label>
-                                                    <select
-                                                        value={item.product_id}
-                                                        onChange={(e) =>
-                                                            handleProductOrUOMChange(index, "product_id", Number(e.target.value))
-                                                        }
-
-                                                        className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 max-h-40 overflow-y-auto"
-                                                        required
-                                                    >
-                                                        <option value="">Select Product</option>
-
-                                                        {/* Show product option values on selection */}
-                                                        {products.map((product) => {
-                                                            // Combine variant options into a single text string
-                                                            const variantText = product.variant_options
-                                                                ? product.variant_options.map(v => `${v.option_value}`).join(" / ")
-                                                                : "";
-
-                                                            return (
-                                                                <option key={product.id} value={product.id}>
-                                                                    {product.name}
-                                                                    {variantText ? ` – ${variantText}` : ""}
-                                                                </option>
-                                                            );
-                                                        })}
-
-                                                    </select>
+                                                    <AsyncSelect
+                                                        loadOptions={loadProductOptions}
+                                                        defaultOptions
+                                                        value={itemProductOptions[index]}
+                                                        onChange={(option) => {
+                                                            const newOpts = [...itemProductOptions];
+                                                            newOpts[index] = option;
+                                                            setItemProductOptions(newOpts);
+                                                            handleProductOrUOMChange(index, "product_id", option ? option.value : '');
+                                                        }}
+                                                        classNames={getSelectClassNames()}
+                                                        isClearable
+                                                        placeholder="Search product..."
+                                                    />
                                                 </div>
 
                                                 {/* UOM */}

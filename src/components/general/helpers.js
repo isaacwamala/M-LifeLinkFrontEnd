@@ -75,6 +75,36 @@ export const fetchActiveFacilityBranches = async (token) => {
 };
 
  
+/**
+ * Admin-only helper: fetch ALL departments regardless of is_active status.
+ * Used by the "Manage Departments" tab in DepartmentStaffing.
+ * Do NOT use this in operational dropdowns — use fetchDepartments() instead,
+ * which now transparently returns only active departments.
+ */
+export const fetchAllDepartmentsForAdmin = async (token) => {
+    if (!token) return [];
+    try {
+        const response = await axios.get(
+            `${API_BASE_URL}config/getAllDepartmentsForAdmin`,
+            { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }
+        );
+        const departments = response.data.departments || [];
+        return departments.map((d) => ({
+            id: d.id,
+            department_name: d.department_name,
+            slug: d.slug,
+            type: d.type,
+            is_active: d.is_active,
+        }));
+    } catch (error) {
+        console.error("Error fetching all departments for admin:", error);
+        const backendMessage =
+            error.response?.data?.message || error.response?.data?.error || "Server error.";
+        toast.error(backendMessage);
+        return [];
+    }
+};
+
 //Helper to return wards
 export const fetchWardsData = async (token) => {
     if (!token) return [];

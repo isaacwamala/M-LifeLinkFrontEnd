@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import {
     ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, Plus, Edit2, Trash2,
@@ -6,12 +6,12 @@ import {
     ChevronRight, ChevronLeft, Building2, CheckCircle2, Clock, AlertCircle,
     Stethoscope, FlaskConical, Pill, Radiation, Scissors, ArrowRight,
     FileText, UserCheck, DoorOpen, Loader2, ShieldAlert, Zap, Circle, ShieldCheck,
-    AlertTriangle, Thermometer, Heart, Activity, Wind, Hash, Info, BedDouble, BookOpen
+    AlertTriangle, Thermometer, Heart, Activity, Wind, Hash, Info, BedDouble, BookOpen,
+    MapPin
 } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
-import { fetchProductsItems } from '../products/products_helper';
 import { fetchDoctors, fetchRoomsWithAssignedDoctors } from './patients_helper';
 import { fetchDepartments } from '../general/helpers';
 import { toast, ToastContainer } from 'react-toastify';
@@ -28,6 +28,9 @@ import { PatientExaminationHistory } from './patient_visit_sub_components/Patien
 import { RejectOrApproveSelfRequestVisit } from './patient_visit_sub_components/RejectOrApproveSelfRequestVisit';
 import { PatientWardAssignmentsHistory } from './patient_visit_sub_components/PatientWardAssignmentsHistory';
 import { PatientTriagesHistory } from './patient_visit_sub_components/PatientTriagesHistory';
+import { AssignVisitToRoom } from './patient_visit_sub_components/AssignVisitToRoom';
+import { VisitRoutingStatus } from './patient_visit_sub_components/VisitRoutingStatus';
+import { FilterVisitsDrawer } from './patient_visit_sub_components/FilterVisitsDrawer';
 
 // ── Import CreateVisitWizard to support when creating patient visit ───────────────────────
 import { CreateVisitWizard } from './CreateVisitWizard';
@@ -83,6 +86,7 @@ const VitalTile = ({ icon: Icon, label, value, unit, iconCls }) => (
     </div>
 );
 
+
 // ─── Info row ──────────────────────────────────────────────────────────────────
 const InfoRow = ({ label, value }) => (
     <div className="flex items-start justify-between gap-3 py-1.5 border-b border-gray-50 dark:border-gray-800 last:border-0">
@@ -90,7 +94,6 @@ const InfoRow = ({ label, value }) => (
         <span className="text-[11px] text-right text-gray-700 dark:text-gray-300 font-medium">{value || '—'}</span>
     </div>
 );
-
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  MAIN PatientVisits COMPONENT
@@ -100,24 +103,24 @@ export function PatientVisit() {
     const token = localStorage.getItem('access_token');
 
     const [visits, setPatientVisits] = useState([]);
+    const [insights, setInsights] = useState(null);
     const [expandedRows, setExpanded] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
 
+    //Fetch roles from redux
     const userRoleId = useSelector((state) => state.auth?.user?.data?.user?.role_id);
     const role = userRoleId;
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-    const [dateFrom, setDateFrom] = useState(startOfMonth);
-    const [dateTo, setDateTo] = useState(endOfMonth);
+
+    const today = new Date().toISOString().split('T')[0];
+    const [dateFrom, setDateFrom] = useState(today);
+    const [dateTo, setDateTo] = useState(today);
 
     const [patients, setPatients] = useState([]);
     const [doctors, setDoctors] = useState([]);
-    const [products, setProducts] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [rooms, setRooms] = useState([]);
     const [loadingRooms, setLoadingRooms] = useState(false);
@@ -158,33 +161,78 @@ export function PatientVisit() {
     const [isTriagesOpen, setIsTriagesOpen] = useState(false);
     const [triagesVisit, setTriagesVisit] = useState(null);
 
+    // Room assignment drawer
+    const [isRoomOpen, setIsRoomOpen] = useState(false);
+    const [roomVisit, setRoomVisit] = useState(null);
 
-    // Prescription modal
-    const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
-    const [activeVisit, setActiveVisit] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [prescriptionForm, setPrescriptionForm] = useState({
-        prescription_source: 'direct', prescription_notes: '',
-        prescription_date: new Date().toISOString().split('T')[0], items: [],
+    // Routing status drawer
+    const [isRoutingOpen, setIsRoutingOpen] = useState(false);
+    const [routingVisit, setRoutingVisit] = useState(null);
+
+    // Filter drawer
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [filters, setFilters] = useState({
+        status: '',
+        visit_category: '',
+        request_origin: '',
+        request_approval_status: '',
     });
+
+    // Post-ward-assignment prompt
+    const [showWardSuccessPrompt, setShowWardSuccessPrompt] = useState(false);
+
+    // ── Active room assignment (for doctor room-scoping banner) ───────────────
+    const [activeRoom, setActiveRoom] = useState(undefined); // undefined = not yet fetched
+    const [loadingActiveRoom, setLoadingActiveRoom] = useState(false);
+
+    // ── Role checks (coerced to numbers to guard against string IDs from the API) ──
+    const roleIds = (role || []).map(Number);
+    const isAdmin = roleIds.includes(1);
+    const isDoctor = roleIds.includes(3);
+    const isReceptionist = roleIds.includes(9);
+
+    // Only admin or receptionist can register a visit — doctor status alone never grants this,
+    // active-room status is irrelevant to this specific permission.
+    const canAddVisit = isAdmin || isReceptionist;
+
+
 
     const legacyInputCls = "w-full rounded-lg px-4 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm";
 
     // ── Data fetching for Patient Visits ──────────────────────────────────────────────────────────
-    const fetchAllPatientVists = async (page = 1) => {
+    const fetchAllPatientVists = useCallback(async (page = 1, overrideFilters, overrideSearch) => {
         setLoading(true);
+        const activeFilters = overrideFilters !== undefined ? overrideFilters : filters;
+        const activeSearch = overrideSearch !== undefined ? overrideSearch : searchTerm;
         try {
+            const drawerFiltersActive = Object.values(activeFilters).some(Boolean);
+            const bypassDateRange = drawerFiltersActive || !!activeSearch;
+
+            // Bypass date range when a search term or drawer filter is active so
+            // results aren't artificially restricted to the selected day.
+            const params = bypassDateRange
+                ? { page }
+                : { from_date: dateFrom, to_date: dateTo, page };
+
+            if (activeSearch) params.search = activeSearch;
+            if (activeFilters.status) params.status = activeFilters.status;
+            if (activeFilters.visit_category) params.visit_category = activeFilters.visit_category;
+            if (activeFilters.request_origin && activeFilters.visit_category === 'Others')
+                params.request_origin = activeFilters.request_origin;
+            if (activeFilters.request_approval_status) params.request_approval_status = activeFilters.request_approval_status;
+
             const res = await axios.get(`${API_BASE_URL}patient/getPatientVisits`, {
                 headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-                params: { from_date: dateFrom, to_date: dateTo, page },
+                params,
             });
             const data = res.data.visits;
             setPatientVisits(data.data);
             setTotalPages(data.last_page);
             setCurrentPage(data.current_page);
+            if (res.data.insights) setInsights(res.data.insights);
         } catch (err) { console.error('Error fetching visits:', err); }
         finally { setLoading(false); }
-    };
+    }, [token, dateFrom, dateTo, filters, searchTerm]);
 
     const loadRooms = async () => {
         setLoadingRooms(true);
@@ -193,29 +241,54 @@ export function PatientVisit() {
         setLoadingRooms(false);
     };
 
+    const fetchActiveRoomAssignment = async () => {
+        setLoadingActiveRoom(true);
+        try {
+            const res = await axios.get(`${API_BASE_URL}set/getMyActiveRoomAssignment`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            });
+            setActiveRoom(res.data.room); // null if no room, object if assigned
+        } catch (err) {
+            console.error('Failed to fetch active room assignment:', err);
+            setActiveRoom(null);
+        } finally {
+            setLoadingActiveRoom(false);
+        }
+    };
+
     useEffect(() => {
         fetchAllPatientVists(1);
         fetchDoctors(token).then(setDoctors);
-        fetchProductsItems(token).then(setProducts);
         fetchBasicPatientsInfoForDropDowns(token).then(setPatients);
         fetchDepartments(token).then(setDepartments);
         loadRooms();
+        // Only doctors need the room assignment check; admins see everything
+        if (!isAdmin) {
+            fetchActiveRoomAssignment();
+        }
     }, [token, dateFrom, dateTo]);
 
     const applyDateFilter = () => fetchAllPatientVists(1);
-    const resetFilters = () => { setDateFrom(startOfMonth); setDateTo(endOfMonth); fetchAllPatientVists(1); };
+    const resetFilters = () => { setDateFrom(today); setDateTo(today); };
 
-    const filteredVisits = useMemo(() => {
-        const term = searchTerm.toLowerCase();
-        return visits.filter(v => {
-            const matchSearch = !term
-                || v.visit_number?.toLowerCase().includes(term)
-                || v.patient?.name.toLowerCase().includes(term)
-                || v.visit_created_by?.name.toLowerCase().includes(term);
-            const d = new Date(v.visit_date);
-            return matchSearch && (!dateFrom || d >= new Date(dateFrom)) && (!dateTo || d <= new Date(dateTo));
-        });
-    }, [visits, searchTerm, dateFrom, dateTo]);
+    // Debounce search — fires backend request 400 ms after the user stops typing
+    const searchDebounceRef = useRef(null);
+    const handleSearchChange = (e) => {
+        const val = e.target.value;
+        setSearchTerm(val);
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = setTimeout(() => {
+            fetchAllPatientVists(1, undefined, val);
+        }, 400);
+    };
+
+    // Count how many filter fields are actively set (for the badge indicator)
+    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+    const handleApplyFilters = (newFilters) => {
+        setFilters(newFilters);
+        fetchAllPatientVists(1, newFilters, undefined);
+    };
 
     const toggleRow = (num) => {
         const s = new Set(expandedRows);
@@ -224,10 +297,12 @@ export function PatientVisit() {
     };
 
     // ── Drawer openers ─────────────────────────────────────────────────────────
+    const openRoomDrawer = (visit) => { setRoomVisit(visit); setIsRoomOpen(true); };
     const openDeptDrawer = (visit) => { setDeptVisit(visit); setIsDeptOpen(true); };
     const openExamDrawer = (visit) => { setExamVisit(visit); setIsExamOpen(true); };
     const openWardDrawer = (visit) => { setWardVisit(visit); setIsWardOpen(true); };
     const openTriageDrawer = (visit) => { setTriageVisit(visit); setIsTriageOpen(true); };
+    const openRoutingDrawer = (visit) => { setRoutingVisit(visit); setIsRoutingOpen(true); };
 
     // ── Edit visit ─────────────────────────────────────────────────────────────
     const openEditModal = (visit) => {
@@ -257,34 +332,6 @@ export function PatientVisit() {
         } catch (err) { toast.error(err.response?.data?.message || 'Something went wrong'); }
         finally { setEditSubmit(false); }
     };
-
-    // ── Prescription helpers ───────────────────────────────────────────────────
-    const openPrescriptionModal = (visit) => { setActiveVisit(visit); setIsPrescriptionOpen(true); };
-    const addPrescriptionItem = () => setPrescriptionForm(p => ({ ...p, items: [...p.items, { drug_id: '', strength: '', instructions: '', quantity: null, duration_days: '' }] }));
-    const updatePrescItem = (i, field, val) => { const items = [...prescriptionForm.items]; items[i][field] = val; setPrescriptionForm({ ...prescriptionForm, items }); };
-    const removePrescItem = (i) => setPrescriptionForm({ ...prescriptionForm, items: prescriptionForm.items.filter((_, idx) => idx !== i) });
-
-    //Submit prescription
-    const submitPrescription = async () => {
-        if (!activeVisit) return;
-        for (let i = 0; i < prescriptionForm.items.length; i++) {
-            const item = prescriptionForm.items[i];
-            if (!item.drug_id) { toast.error(`Select a medicine for item ${i + 1}`); return; }
-            if (!item.instructions?.trim()) { toast.error(`Provide instructions for item ${i + 1}`); return; }
-            if (!item.duration_days || item.duration_days <= 0) { toast.error(`Provide valid duration for item ${i + 1}`); return; }
-        }
-        try {
-            setIsSubmitting(true);
-            const res = await axios.post(`${API_BASE_URL}sales/storePrescription`,
-                { patient_visit_id: activeVisit.id, ...prescriptionForm },
-                { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
-            toast.success(res.data.message);
-            setIsPrescriptionOpen(false);
-            navigate('/medical/prescriptions');
-        } catch (err) { toast.error(err.response?.data?.message || 'Failed to create prescription'); }
-        finally { setIsSubmitting(false); }
-    };
-
 
     // ══════════════════════════════════════════════════════════════════════════
     return (
@@ -331,7 +378,10 @@ export function PatientVisit() {
                 onClose={() => setIsWardOpen(false)}
                 visit={wardVisit}
                 token={token}
-                onSuccess={() => fetchAllPatientVists(currentPage)}
+                onSuccess={() => {
+                    fetchAllPatientVists(currentPage);
+                    setShowWardSuccessPrompt(true);
+                }}
             />
 
             {/* ── Add Triage Drawer ── */}
@@ -368,6 +418,15 @@ export function PatientVisit() {
                 token={token}
             />
 
+            {/* ── Assign to Room Drawer ── */}
+            <AssignVisitToRoom
+                isOpen={isRoomOpen}
+                onClose={() => setIsRoomOpen(false)}
+                visit={roomVisit}
+                token={token}
+                onSuccess={() => fetchAllPatientVists(currentPage)}
+            />
+
             {/* Display Triages History */}
             <PatientTriagesHistory
                 isOpen={isTriagesOpen}
@@ -375,6 +434,71 @@ export function PatientVisit() {
                 visit={triagesVisit}
                 token={token}
             />
+
+            {/* ── Visit Routing Status Drawer ── */}
+            <VisitRoutingStatus
+                isOpen={isRoutingOpen}
+                onClose={() => setIsRoutingOpen(false)}
+                visit={routingVisit}
+                token={token}
+            />
+
+            {/* ── Filter Visits Drawer ── */}
+            <FilterVisitsDrawer
+                isOpen={isFilterOpen}
+                onClose={() => setIsFilterOpen(false)}
+                currentFilters={filters}
+                onApply={handleApplyFilters}
+            />
+
+            {/* ── Post-ward-assignment prompt ── */}
+            {showWardSuccessPrompt && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden animate-fade-in">
+                        {/* Header strip */}
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                                    <CheckCircle2 className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-bold text-sm">Visit assigned to ward</p>
+                                    <p className="text-blue-100 text-xs mt-0.5">What would you like to do next?</p>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Body */}
+                        <div className="px-6 py-5 space-y-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                The ward assignment is saved. You can stay here to continue managing visits, or go to the Ward Assignments Board to assign a bed.
+                            </p>
+                            <button
+                                onClick={() => navigate('/ward_assignments_board')}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+                                    text-sm font-semibold text-white
+                                    bg-gradient-to-r from-blue-600 to-indigo-600
+                                    hover:from-blue-700 hover:to-indigo-700 transition shadow-md shadow-blue-200 dark:shadow-blue-900/40"
+                            >
+                                <BedDouble className="w-4 h-4" />
+                                Go to Ward Assignments Board
+                                <ArrowRight className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setShowWardSuccessPrompt(false)}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+                                    text-sm font-medium text-gray-600 dark:text-gray-300
+                                    bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                            >
+                                Remain here
+                            </button>
+                        </div>
+                    </div>
+                    <style>{`
+                        @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+                        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+                    `}</style>
+                </div>
+            )}
 
             {/* Table to display patient visits */}
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border dark:bg-gradient-to-br dark:from-purple-900 dark:via-blue-900 dark:to-black p-8 transition-colors border-gray-200 dark:border-gray-700 mt-5">
@@ -387,24 +511,114 @@ export function PatientVisit() {
                             <h1 className="text-black-900 font-bold dark:text-white text-2xl md:text-[30px]">Patient Visit Center</h1>
                         </div>
                         <p className="text-gray-600 dark:text-gray-300 text-sm md:text-base">
-                            Visits displayed are those registered in this current month ({new Date().toLocaleString('default', { month: 'long' })}) of {new Date().getFullYear()}.
-                            Adjust the filters to view visits from other periods.
+                            Visits displayed are from today ({new Date().toLocaleDateString('default', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}).
+                            Adjust the date filters to view visits from other periods.
                         </p>
                     </div>
+
+                    {/* ── Room assignment banner ── */}
+                    {isAdmin && (
+                        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-sm font-medium">
+                            <DoorOpen className="w-4 h-4 flex-shrink-0" />
+                            Viewing all visits in their  rooms
+                        </div>
+                    )}
+
+                    {/* Doctor priority specific banner, not admins */}
+                    {isDoctor && !isAdmin && !loadingActiveRoom && activeRoom && (
+                        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-700 dark:text-green-300 text-sm font-medium">
+                            <DoorOpen className="w-4 h-4 flex-shrink-0" />
+                            Viewing visits for Room {activeRoom.room_name} ({activeRoom.room_number})
+                        </div>
+                    )}
+                    {/* D octor priority specific banner, not admins*/}
+                    {isDoctor && !isAdmin && !loadingActiveRoom && !activeRoom && activeRoom !== undefined && (
+                        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-sm font-medium">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                            You are not currently assigned to a room. Contact an admin to get assigned before registering visits.
+                        </div>
+                    )}
+
+                    {/* Disable the button if role isnt admin or receptionisit */}
                     <button
                         onClick={() => setIsCreateOpen(true)}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors shadow">
+                        disabled={!canAddVisit}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors shadow text-white ${!canAddVisit ? 'bg-blue-400 cursor-not-allowed opacity-60' : 'bg-blue-600 hover:bg-blue-700'
+                            }`}>
                         <Plus className="w-5 h-5" /> Add Patient Visit
                     </button>
                 </div>
 
+                {/* ── Visit Insights ── */}
+                {insights && (
+                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
+                            Visit Insights — filtered period
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+                            {/* Total */}
+                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700">
+                                <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Total Visits</span>
+                                <span className="text-2xl font-bold text-gray-800 dark:text-gray-100">{insights.total}</span>
+                            </div>
+
+                            {/* OPD */}
+                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                                <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wider">OPD</span>
+                                <span className="text-2xl font-bold text-blue-700 dark:text-blue-300">{insights.opd}</span>
+                                <span className="text-[10px] text-blue-400 dark:text-blue-500">Outpatient</span>
+                            </div>
+
+                            {/* IPD */}
+                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800">
+                                <span className="text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider">IPD</span>
+                                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{insights.ipd}</span>
+                                <span className="text-[10px] text-indigo-400 dark:text-indigo-500">Inpatient</span>
+                            </div>
+
+                            {/* Others — with self/doctor sub-breakdown */}
+                            <div className="flex flex-col gap-1 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
+                                <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400 uppercase tracking-wider">Others</span>
+                                <span className="text-2xl font-bold text-amber-700 dark:text-amber-300">{insights.others}</span>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                        <Circle className="w-1.5 h-1.5 fill-amber-500" />
+                                        {insights.others_self_request} self-request
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                        <Circle className="w-1.5 h-1.5 fill-amber-700" />
+                                        {insights.others_doctor_request} doctor-request
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+
                 {/* Filters */}
                 <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex flex-col gap-4">
-                        <div className="w-full relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                            <input type="text" placeholder="Search patient visits within your selected date range filters…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 transition" />
+                        <div className="flex gap-3">
+                            <div className="flex-1 relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input type="text" placeholder="Search by patient name, visit number, or phone…" value={searchTerm} onChange={handleSearchChange}
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 transition" />
+                            </div>
+                            {/* Filters button with active badge */}
+                            <button
+                                onClick={() => setIsFilterOpen(true)}
+                                className="relative flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium"
+                            >
+                                <Filter className="w-4 h-4" />
+                                Filters
+                                {activeFilterCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                                        {activeFilterCount}
+                                    </span>
+                                )}
+                            </button>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             <div className="relative">
@@ -430,18 +644,18 @@ export function PatientVisit() {
                     <table className="w-full">
                         <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                {['Visit No', 'Patient Name', 'Visit Category', 'Visit Date', 'Branch', 'Assigned Doctor', 'Departments', 'More'].map(h => (
+                                {['Visit No', 'Patient Name', 'Visit Category', 'Visit Date', 'Branch', 'Room', 'status', 'Departments', 'More'].map(h => (
                                     <th key={h} className="px-6 py-3 text-left text-xs text-gray-500 font-bold dark:text-gray-400 uppercase tracking-wider">{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                             {loading ? (
-                                [1, 2, 3, 4, 5].map(i => <tr key={i}>{[...Array(8)].map((_, j) => <td key={j} className="px-6 py-4"><Skeleton /></td>)}</tr>)
-                            ) : filteredVisits.length === 0 ? (
-                                <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">No visits found — try adjusting the filters</td></tr>
+                                [1, 2, 3, 4, 5].map(i => <tr key={i}>{[...Array(9)].map((_, j) => <td key={j} className="px-6 py-4"><Skeleton /></td>)}</tr>)
+                            ) : visits.length === 0 ? (
+                                <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">No visits found — try adjusting the filters</td></tr>
                             ) : (
-                                filteredVisits.map(visit => (
+                                visits.map(visit => (
                                     <React.Fragment key={visit.visit_number}>
                                         <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition cursor-pointer"
                                             onClick={() => toggleRow(visit.visit_number)}>
@@ -450,7 +664,8 @@ export function PatientVisit() {
                                             <td className="px-6 py-4 text-gray-900 dark:text-gray-200 capitalize whitespace-nowrap">{visit.visit_category ?? visit.visit_type ?? '—'}</td>
                                             <td className="px-6 py-4 text-gray-900 dark:text-gray-200 whitespace-nowrap">{visit.visit_date}</td>
                                             <td className="px-6 py-4 text-gray-900 dark:text-gray-200 whitespace-nowrap">{visit.branch?.name ?? 'N/A'}</td>
-                                            <td className="px-6 py-4 text-gray-900 dark:text-gray-200 whitespace-nowrap">{visit.assigned_doctor?.name ?? 'N/A'}</td>
+                                            <td className="px-6 py-4 text-gray-900 dark:text-gray-200 whitespace-nowrap">{visit.room?.room_name ?? 'N/A'}</td>
+                                            <td className="px-6 py-4 text-gray-900 dark:text-gray-200 whitespace-nowrap">{visit.status ?? 'N/A'}</td>
                                             <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                                                 <button onClick={() => openDeptDrawer(visit)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
@@ -469,7 +684,7 @@ export function PatientVisit() {
                                         {/* ══ EXPANDED ROW ══ */}
                                         {expandedRows.has(visit.visit_number) && (
                                             <tr>
-                                                <td colSpan={8} className="p-0">
+                                                <td colSpan={9} className="p-0">
                                                     <div className="border-t border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/60">
                                                         <div className="h-0.5 bg-gradient-to-r from-blue-500 via-indigo-400 to-transparent opacity-50" />
 
@@ -571,85 +786,133 @@ export function PatientVisit() {
                                                                 </div>
 
                                                                 {/* Action buttons */}
-                                                                {/* Add examination notes */}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); openExamDrawer(visit); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                        text-sm font-semibold text-white
-                                                                        bg-gradient-to-r from-teal-600 to-emerald-600
-                                                                        hover:from-teal-700 hover:to-emerald-700 transition shadow-md"
-                                                                >
-                                                                    <Stethoscope className="w-4 h-4" /> Add Examination Notes
-                                                                </button>
 
-                                                                {/* Assign to ward button */}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); openWardDrawer(visit); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                        text-sm font-semibold text-white
-                                                                        bg-gradient-to-r from-blue-600 to-indigo-600
-                                                                        hover:from-blue-700 hover:to-indigo-700 transition shadow-md"
-                                                                >
-                                                                    <BedDouble className="w-4 h-4" /> Assign to Ward
-                                                                </button>
-
-                                                                {/* Add triage */}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); openTriageDrawer(visit); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                        text-sm font-semibold text-white
-                                                                        bg-gradient-to-r from-orange-500 to-rose-500
-                                                                        hover:from-orange-600 hover:to-rose-600 transition shadow-md"
-                                                                >
-                                                                    <ShieldAlert className="w-4 h-4" /> Add Triage
-                                                                </button>
-
-                                                                {/* Button to view examination history */}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); openHistoryModal(visit); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                    text-sm font-semibold text-white
-                                                                    bg-gradient-to-r from-violet-600 to-indigo-600
-                                                                    hover:from-violet-700 hover:to-indigo-700 transition shadow-md"
-                                                                >
-                                                                    <BookOpen className="w-4 h-4" /> View Patient Medical History
-                                                                </button>
-
-                                                                {/* View patient ward assignments*/}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setWardHistoryVisit(visit); setIsWardHistoryOpen(true); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                    text-sm font-semibold text-white
-                                                                    bg-gradient-to-r from-green-800 to-indigo-800
-                                                                    hover:from-green-700 hover:to-indigo-800 transition shadow-md"
-                                                                >
-                                                                    <BedDouble className="w-4 h-4" /> View Patient Ward History
-                                                                </button>
-
-                                                                {/* View patient triage history */}
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setTriagesVisit(visit); setIsTriagesOpen(true); }}
-                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                    text-sm font-semibold text-white
-                                                                    bg-gradient-to-r from-blue-500 to-indigo-800
-                                                                    hover:from-blue-500 hover:to-indigo-800 transition shadow-md"
-                                                                >
-                                                                    <Activity className="w-4 h-4" /> View Patient Triage History
-                                                                </button>
-
-                                                                {/* Button to reject or approve patient visit, applies for only self request visits */}
+                                                                {/* Pending self-request Others visits: show ONLY Approve/Reject */}
                                                                 {(visit.visit_category === 'Others' || visit.visit_type === 'Others') &&
-                                                                    visit.request_origin === 'self_request' && (
+                                                                    visit.request_origin === 'self_request' &&
+                                                                    visit.request_approval_status === 'pending' ? (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setDecisionVisit(visit); setIsDecisionOpen(true); }}
+                                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                        text-sm font-semibold text-white
+                                                                        bg-gradient-to-r from-amber-500 to-orange-500
+                                                                         hover:from-amber-600 hover:to-orange-600 transition shadow-md"
+                                                                    >
+                                                                        <ShieldCheck className="w-4 h-4" /> Approve / Reject Request
+                                                                    </button>
+                                                                ) : (
+                                                                    <>
+                                                                        {/* Add examination notes */}
                                                                         <button
-                                                                            onClick={(e) => { e.stopPropagation(); setDecisionVisit(visit); setIsDecisionOpen(true); }}
+                                                                            onClick={(e) => { e.stopPropagation(); openExamDrawer(visit); }}
                                                                             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                             text-sm font-semibold text-white
-                                                                             bg-gradient-to-r from-amber-500 to-orange-500
-                                                                            hover:from-amber-600 hover:to-orange-600 transition shadow-md"
+                                                                                text-sm font-semibold text-white
+                                                                                bg-gradient-to-r from-teal-600 to-emerald-600
+                                                                                hover:from-teal-700 hover:to-emerald-700 transition shadow-md"
                                                                         >
-                                                                            <ShieldCheck className="w-4 h-4" /> Approve / Reject Request
+                                                                            <Stethoscope className="w-4 h-4" /> Add Examination Notes
                                                                         </button>
-                                                                    )}
+
+                                                                        {/* Assign to ward button */}
+                                                                        {/* Assign to ward button — IPD visits only */}
+                                                                        {(visit.visit_category ?? visit.visit_type) === 'IPD' && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); openWardDrawer(visit); }}
+                                                                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                                 text-sm font-semibold text-white
+                                                                                bg-gradient-to-r from-blue-600 to-indigo-600
+                                                                                 hover:from-blue-700 hover:to-indigo-700 transition shadow-md"
+                                                                            >
+                                                                                <BedDouble className="w-4 h-4" /> Assign to Ward
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Assign to Room — only when waiting */}
+                                                                        {visit.status === 'waiting' && (
+                                                                            <button
+                                                                                onClick={(e) => { e.stopPropagation(); openRoomDrawer(visit); }}
+                                                                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+            text-sm font-semibold text-white
+            bg-gradient-to-r from-violet-600 to-purple-600
+             hover:from-violet-700 hover:to-purple-700 transition shadow-md"
+                                                                            >
+                                                                                <DoorOpen className="w-4 h-4" />
+                                                                                {visit.room ? 'Re-assign to Room' : 'Assign to Room'}
+                                                                            </button>
+                                                                        )}
+
+                                                                        {/* Add triage */}
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); openTriageDrawer(visit); }}
+                                                                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                                text-sm font-semibold text-white
+                                                                                bg-gradient-to-r from-orange-500 to-rose-500
+                                                                                hover:from-orange-600 hover:to-rose-600 transition shadow-md"
+                                                                        >
+                                                                            <ShieldAlert className="w-4 h-4" /> Add Triage
+                                                                        </button>
+
+                                                                        {/* Button to view examination history */}
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); openHistoryModal(visit); }}
+                                                                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                            text-sm font-semibold text-white
+                                                                            bg-gradient-to-r from-violet-600 to-indigo-600
+                                                                            hover:from-violet-700 hover:to-indigo-700 transition shadow-md"
+                                                                        >
+                                                                            <BookOpen className="w-4 h-4" /> View Patient Medical History
+                                                                        </button>
+
+                                                                        {/* View patient ward assignments */}
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setWardHistoryVisit(visit); setIsWardHistoryOpen(true); }}
+                                                                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                            text-sm font-semibold text-white
+                                                                            bg-gradient-to-r from-green-800 to-indigo-800
+                                                                            hover:from-green-700 hover:to-indigo-800 transition shadow-md"
+                                                                        >
+                                                                            <BedDouble className="w-4 h-4" /> View Patient Ward History
+                                                                        </button>
+
+                                                                        {/* View patient triage history */}
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setTriagesVisit(visit); setIsTriagesOpen(true); }}
+                                                                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                            text-sm font-semibold text-white
+                                                                            bg-gradient-to-r from-blue-500 to-indigo-800
+                                                                            hover:from-blue-500 hover:to-indigo-800 transition shadow-md"
+                                                                        >
+                                                                            <Activity className="w-4 h-4" /> View Patient Triage History
+                                                                        </button>
+
+                                                                        {/* View routing status */}
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); openRoutingDrawer(visit); }}
+                                                                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                            text-sm font-semibold text-white
+                                                                            bg-gradient-to-r from-cyan-600 to-teal-600
+                                                                            hover:from-cyan-700 hover:to-teal-700 transition shadow-md"
+                                                                        >
+                                                                            <MapPin className="w-4 h-4" /> View Routing Status
+                                                                        </button>
+
+                                                                        {/* Approve/Reject button for non-pending self-request Others visits */}
+                                                                        {/* Approve/Reject button for non-pending, non-approved self-request Others visits */}
+                                                                        {(visit.visit_category === 'Others' || visit.visit_type === 'Others') &&
+                                                                            visit.request_origin === 'self_request' &&
+                                                                            visit.request_approval_status !== 'approved' && (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); setDecisionVisit(visit); setIsDecisionOpen(true); }}
+                                                                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                                                                                     text-sm font-semibold text-white
+                                                                                      bg-gradient-to-r from-amber-500 to-orange-500
+                                                                                      hover:from-amber-600 hover:to-orange-600 transition shadow-md"
+                                                                                >
+                                                                                    <ShieldCheck className="w-4 h-4" /> Approve / Reject Request
+                                                                                </button>
+                                                                            )}
+                                                                    </>
+                                                                )}
                                                             </div>
 
 
@@ -704,7 +967,7 @@ export function PatientVisit() {
 
                 {/* Pagination */}
                 <div className="px-4 sm:px-6 py-3 bg-gray-100 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <div className="text-sm text-gray-500 dark:text-gray-300">Showing {filteredVisits.length} of {totalPages} results</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-300">Showing {visits.length} of {totalPages} results</div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => fetchAllPatientVists(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
                             className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -781,90 +1044,6 @@ export function PatientVisit() {
                 </div>
             )}
 
-
-            {/* ══ PRESCRIPTION MODAL ══ */}
-            {isPrescriptionOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white dark:bg-gray-900 shadow-xl">
-                        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4 bg-white dark:bg-gray-900">
-                            <div>
-                                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Create Medical Prescription</h2>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Visit No: <span className="font-medium">{activeVisit?.visit_number}</span></p>
-                            </div>
-                            <button onClick={() => setIsPrescriptionOpen(false)} className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800">
-                                <X className="w-5 h-5 text-gray-500" />
-                            </button>
-                        </div>
-                        <div className="px-6 py-6 space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">Source *</label>
-                                    <select value={prescriptionForm.prescription_source} onChange={e => setPrescriptionForm({ ...prescriptionForm, prescription_source: e.target.value })} className={legacyInputCls}>
-                                        <option value="direct">Direct</option>
-                                        <option value="from_lab">From Lab</option>
-                                        <option value="external">External</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">Prescription Date *</label>
-                                    <input type="date" value={prescriptionForm.prescription_date} onChange={e => setPrescriptionForm({ ...prescriptionForm, prescription_date: e.target.value })} className={legacyInputCls} />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-sm text-gray-700 dark:text-gray-300 mb-1 block">Prescription Notes</label>
-                                <textarea rows={3} value={prescriptionForm.prescription_notes} onChange={e => setPrescriptionForm({ ...prescriptionForm, prescription_notes: e.target.value })}
-                                    placeholder="Additional clinical instructions…" className={`${legacyInputCls} resize-none`} />
-                            </div>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Prescribed Medicines</h3>
-                                    <button onClick={addPrescriptionItem} className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700">
-                                        <Plus className="w-4 h-4" /> Add medicine
-                                    </button>
-                                </div>
-                                {prescriptionForm.items.length === 0 && (
-                                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 py-6 text-center text-sm text-gray-500">No medicines added</div>
-                                )}
-                                {prescriptionForm.items.map((item, index) => (
-                                    <div key={index} className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 grid grid-cols-1 md:grid-cols-7 gap-4 bg-white dark:bg-gray-900">
-                                        <div className="md:col-span-2">
-                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">Medicine *</label>
-                                            <select value={item.drug_id || ''} onChange={e => updatePrescItem(index, 'drug_id', Number(e.target.value))} className={legacyInputCls}>
-                                                <option value="">Select medicine</option>
-                                                {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.variant_options?.length ? ' — ' + p.variant_options.map(v => v.option_value).join(' / ') : ''}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">Strength</label>
-                                            <input value={item.strength} onChange={e => updatePrescItem(index, 'strength', e.target.value)} className={legacyInputCls} />
-                                        </div>
-                                        <div className="md:col-span-2">
-                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">Instructions</label>
-                                            <input value={item.instructions} onChange={e => updatePrescItem(index, 'instructions', e.target.value)} className={legacyInputCls} />
-                                        </div>
-                                        <div>
-                                            <label className="block mb-1 text-xs text-gray-600 dark:text-gray-400">Duration Days</label>
-                                            <input type="number" value={item.duration_days} onChange={e => updatePrescItem(index, 'duration_days', e.target.value)} className={legacyInputCls} />
-                                        </div>
-                                        <div className="flex items-end justify-center">
-                                            <button onClick={() => removePrescItem(index)} className="mb-1 rounded-lg p-2 text-gray-500 hover:text-red-600 hover:bg-gray-100 dark:hover:bg-gray-800">
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                            <button onClick={() => setIsPrescriptionOpen(false)} className="px-5 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700">Cancel</button>
-                            <button disabled={isSubmitting} onClick={submitPrescription}
-                                className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2">
-                                {isSubmitting ? <span className="w-5 h-5 border-2 border-t-transparent border-white rounded-full animate-spin" /> : 'Save Prescription'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             <style>{`
                 @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }

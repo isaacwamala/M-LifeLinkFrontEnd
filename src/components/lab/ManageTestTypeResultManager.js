@@ -5,6 +5,9 @@ import { API_BASE_URL } from '../general/constants';
 import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
 
+import Select from 'react-select';
+import { getSelectClassNames } from '../general/searchSelectStyles.js';
+
 /**
  * This function component is intended to set or configure the test result parameters for the specific test type.
  * WHY Setting test result parameters?
@@ -678,6 +681,7 @@ const ManageTestTypeResultManager = () => {
             </div>
           </div>
 
+         
           {/* Test Type Selection */}
           <div className="mb-8">
             <label
@@ -687,25 +691,27 @@ const ManageTestTypeResultManager = () => {
               Select Test Type
             </label>
 
-            <select
-              id="testType"
-              value={selectedTestTypeId || ''}
-              onChange={(e) => setSelectedTestTypeId(Number(e.target.value) || null)}
-              className="
-                w-full max-w-md px-4 py-2 rounded-lg
-                border border-gray-300 dark:border-gray-600
-                bg-white dark:bg-gray-700
-                text-gray-900 dark:text-white
-                focus:outline-none focus:ring-2 focus:ring-blue-500
-              "
-            >
-              <option value="">-- Select a Test Type --</option>
-              {testTypes.map(type => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-full max-w-md">
+              <Select
+                inputId="testType"
+                options={testTypes.map(type => ({
+                  value: type.id,
+                  label: type.name,
+                }))}
+                value={
+                  selectedTestTypeId
+                    ? {
+                      value: selectedTestTypeId,
+                      label: testTypes.find(t => t.id === selectedTestTypeId)?.name || '',
+                    }
+                    : null
+                }
+                onChange={(option) => setSelectedTestTypeId(option ? option.value : null)}
+                classNames={getSelectClassNames()}
+                isClearable
+                placeholder="-- Select a Test Type --"
+              />
+            </div>
           </div>
         </div>
 
@@ -923,7 +929,7 @@ const ManageTestTypeResultManager = () => {
                                 </span>
                               </div>
 
-                               <div>
+                              <div>
                                 <span className="text-gray-600 dark:text-gray-400 font-bold">
                                   Target turn around time and duration:
                                 </span>{' '}
