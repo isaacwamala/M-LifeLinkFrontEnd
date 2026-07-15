@@ -589,7 +589,7 @@ export function PatientMedicalPrescriptions() {
                         <div className="flex items-center gap-3">
                             <HandCoins className="w-8 h-8 text-blue-600" />
                             <h1 className="text-black-900 font-bold dark:text-white text-2xl md:text-[30px]">
-                                Patient Visit Prescriptions and Dispensing 
+                                Patient Visit Prescriptions and Dispensing
                             </h1>
                         </div>
                         <p className="text-gray-600 dark:text-gray-300 text-sm md:text-base">
@@ -781,13 +781,15 @@ export function PatientMedicalPrescriptions() {
                                                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                         </button>
 
-                                                        <button
-                                                            onClick={() => openUpdateModal(prescription)}
-                                                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
-                                                            title="Edit prescription"
-                                                        >
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
+                                                        {prescription.prescription_status !== "dispensed" && (
+                                                            <button
+                                                                onClick={() => openUpdateModal(prescription)}
+                                                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition"
+                                                                title="Edit prescription"
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
 
                                                         {prescription.prescription_status === "pending" && (
                                                             <>
@@ -961,6 +963,7 @@ export function PatientMedicalPrescriptions() {
                                                                         </p>
                                                                     </div>
                                                                 </div>
+
                                                             </div>
 
                                                         </div>
@@ -1470,7 +1473,7 @@ export function PatientMedicalPrescriptions() {
                                                         ? `${qtyInUom} ${item.uom_name ?? 'unit'}${qtyInUom !== 1 ? 's' : ''} × ${item.multiplier} = `
                                                         : ''}
                                                     <span className="font-bold text-purple-500">
-                                                        <strong>{item.prescribed_quantity} {baseUomName}{item.prescribed_quantity !== 1 ? 's' : ''} needed to dispense</strong> 
+                                                        <strong>{item.prescribed_quantity} {baseUomName}{item.prescribed_quantity !== 1 ? 's' : ''} needed to dispense</strong>
                                                     </span>
                                                 </p>
                                             )}

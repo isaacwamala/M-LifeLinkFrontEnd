@@ -786,6 +786,7 @@ export function PatientVisit() {
                                                                 </div>
 
                                                                 {/* Action buttons */}
+
                                                                 {/* Pending self-request Others visits: show ONLY Approve/Reject */}
                                                                 {(visit.visit_category === 'Others' || visit.visit_type === 'Others') &&
                                                                     visit.request_origin === 'self_request' &&
@@ -793,9 +794,9 @@ export function PatientVisit() {
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); setDecisionVisit(visit); setIsDecisionOpen(true); }}
                                                                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                             text-sm font-semibold text-white
-                                                                             bg-gradient-to-r from-amber-500 to-orange-500
-                                                                            hover:from-amber-600 hover:to-orange-600 transition shadow-md"
+                                                                        text-sm font-semibold text-white
+                                                                        bg-gradient-to-r from-amber-500 to-orange-500
+                                                                         hover:from-amber-600 hover:to-orange-600 transition shadow-md"
                                                                     >
                                                                         <ShieldCheck className="w-4 h-4" /> Approve / Reject Request
                                                                     </button>
@@ -831,11 +832,12 @@ export function PatientVisit() {
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); openRoomDrawer(visit); }}
                                                                                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                                                                    text-sm font-semibold text-white
-                                                                                    bg-gradient-to-r from-violet-600 to-purple-600
-                                                                                    hover:from-violet-700 hover:to-purple-700 transition shadow-md"
+            text-sm font-semibold text-white
+            bg-gradient-to-r from-violet-600 to-purple-600
+             hover:from-violet-700 hover:to-purple-700 transition shadow-md"
                                                                             >
-                                                                                <DoorOpen className="w-4 h-4" /> Assign to Room
+                                                                                <DoorOpen className="w-4 h-4" />
+                                                                                {visit.room ? 'Re-assign to Room' : 'Assign to Room'}
                                                                             </button>
                                                                         )}
 
@@ -895,14 +897,16 @@ export function PatientVisit() {
                                                                         </button>
 
                                                                         {/* Approve/Reject button for non-pending self-request Others visits */}
+                                                                        {/* Approve/Reject button for non-pending, non-approved self-request Others visits */}
                                                                         {(visit.visit_category === 'Others' || visit.visit_type === 'Others') &&
-                                                                            visit.request_origin === 'self_request' && (
+                                                                            visit.request_origin === 'self_request' &&
+                                                                            visit.request_approval_status !== 'approved' && (
                                                                                 <button
                                                                                     onClick={(e) => { e.stopPropagation(); setDecisionVisit(visit); setIsDecisionOpen(true); }}
                                                                                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
                                                                                      text-sm font-semibold text-white
-                                                                                     bg-gradient-to-r from-amber-500 to-orange-500
-                                                                                    hover:from-amber-600 hover:to-orange-600 transition shadow-md"
+                                                                                      bg-gradient-to-r from-amber-500 to-orange-500
+                                                                                      hover:from-amber-600 hover:to-orange-600 transition shadow-md"
                                                                                 >
                                                                                     <ShieldCheck className="w-4 h-4" /> Approve / Reject Request
                                                                                 </button>

@@ -7,68 +7,7 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
 function Suppliers() {
-    
-    //     {
-    //         id: "1",
-    //         name: "Musa Body",
-    //         number: "No: #3",
-    //         contactPerson: "Musa k",
-    //         phone: "0754646294",
-    //         email: "musa@example.com",
-    //         address: "Katwe",
-    //         balance: -3000000,
-    //     },
-    //     {
-    //         id: "2",
-    //         name: "WalkIn-Supplier",
-    //         number: "No: #1",
-    //         contactPerson: "walkin",
-    //         phone: "",
-    //         email: "walkin@example.com",
-    //         address: "Kampala",
-    //         balance: 0,
-    //     },
-    //     {
-    //         id: "3",
-    //         name: "Container Village",
-    //         number: "No: #4",
-    //         contactPerson: "jj",
-    //         phone: "8754555656",
-    //         email: "container@example.com",
-    //         address: "Kampala",
-    //         balance: 0,
-    //     },
-    //     {
-    //         id: "4",
-    //         name: "Mukwano Co.",
-    //         number: "No: #2",
-    //         contactPerson: "General Manager",
-    //         phone: "0701015233",
-    //         email: "mukwano@example.com",
-    //         address: "",
-    //         balance: 0,
-    //     },
-    //     {
-    //         id: "5",
-    //         name: "Uganda Traders",
-    //         number: "No: #5",
-    //         contactPerson: "John Doe",
-    //         phone: "0789456123",
-    //         email: "uganda@example.com",
-    //         address: "Masaka",
-    //         balance: 500000,
-    //     },
-    //     {
-    //         id: "6",
-    //         name: "Kisenyi Hardware",
-    //         number: "No: #6",
-    //         contactPerson: "Peter K",
-    //         phone: "0701234567",
-    //         email: "kisenyi@example.com",
-    //         address: "Kampala",
-    //         balance: -120000,
-    //     },
-    // ]);
+
     const token = localStorage.getItem('access_token');
     const [loading, setLoading] = useState(true);
     const [suppliers, setSuppliers] = useState([]); //initialize state 
@@ -238,7 +177,7 @@ function Suppliers() {
 
             if (modalMode === "add") {
                 await axios.post(
-                    `${API_BASE_URL}config/registerSupplier`,
+                    `${API_BASE_URL}config/register_supplier`,
                     {
                         name: formData.name,
                         contact: formData.contact,

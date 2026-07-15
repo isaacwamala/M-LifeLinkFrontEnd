@@ -71,7 +71,7 @@ const MainInventoryTrack = () => {
         const products = inventoryData?.data?.data || [];
         const totalStock = products.reduce((sum, p) => sum + p.total_quantity, 0);
         const totalBatches = products.reduce((sum, p) => sum + p.total_batches, 0);
-    
+
         const outOfStockCount = products.filter(p => p.total_quantity === 0).length;
 
         return {
@@ -231,11 +231,10 @@ const MainInventoryTrack = () => {
                                             <React.Fragment key={product.id}>
                                                 {/* Main Product Row */}
                                                 <tr
-                                                    className={`transition-colors ${
-                                                        expandedRow === product.id
+                                                    className={`transition-colors ${expandedRow === product.id
                                                             ? 'bg-blue-50/60 dark:bg-blue-900/10 border-l-4 border-l-blue-500'
                                                             : 'hover:bg-gray-50 dark:hover:bg-gray-700/30 border-l-4 border-l-transparent'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {/* Product Name */}
                                                     <td className="px-6 py-4">
@@ -271,13 +270,12 @@ const MainInventoryTrack = () => {
                                                     {/* Stock Quantity */}
                                                     <td className="px-6 py-4 text-right">
                                                         <span
-                                                            className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${
-                                                                product.total_quantity === 0
+                                                            className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold ${product.total_quantity === 0
                                                                     ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                                                     : product.total_quantity < 20
                                                                         ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                                                                         : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             {product.total_quantity}
                                                         </span>
@@ -287,11 +285,10 @@ const MainInventoryTrack = () => {
                                                     <td className="px-6 py-4 text-center">
                                                         <button
                                                             onClick={() => setExpandedRow(expandedRow === product.id ? null : product.id)}
-                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 ${
-                                                                expandedRow === product.id
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 ${expandedRow === product.id
                                                                     ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                                                                     : 'bg-white dark:bg-gray-700 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <span>{product.total_batches} Batch{product.total_batches !== 1 ? 'es' : ''}</span>
                                                             <ChevronDown
@@ -333,7 +330,7 @@ const MainInventoryTrack = () => {
                                                                                 {product.batches.map(batch => (
                                                                                     <tr key={batch.batch_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
                                                                                         <td className="px-4 py-3 font-mono text-xs font-medium text-gray-800 dark:text-gray-200">
-                                                                                            {batch.batch_number}
+                                                                                            {batch.batch_number ?? batch.internal_batch_number}
                                                                                         </td>
                                                                                         <td className="px-4 py-3">
                                                                                             <span className={`text-xs font-medium ${new Date(batch.expiry_date) < new Date() ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}>

@@ -26,17 +26,6 @@ export default function RegisterMedicalStock() {
         supplier_price: '',
         discounted_selling_price: '',
     });
-    //   const [formData, setFormData] = useState({
-    //     productId: '',
-    //     uomId: '',
-    //     supplierId: '',
-    //     batchNumber: '',
-    //     purchaseDate: '',
-    //     expiryDate: '',
-    //     quantity: '',
-    //     supplierPrice: '',
-    //     sellingPrice: '',
-    // });
 
     const [showModal, setShowModal] = useState(false);
     const [modalMessage, setModalMessage] = useState({ product: '', uom: '' });
@@ -117,7 +106,7 @@ export default function RegisterMedicalStock() {
     const selectedUOM = uoms.find(uom => uom.id.toString() === formData.entered_uom_id);
 
     const productWithConversion = conversions.find(
-         conv => String(conv?.id) === String(formData.product_id)
+        conv => String(conv?.id) === String(formData.product_id)
     );
 
     //Check conversion based on the entered unit of the product
@@ -209,30 +198,34 @@ export default function RegisterMedicalStock() {
                 }
             );
 
-            if (response.data.status === "success") {
-                toast.success(response.data.message || 'Batch saved successfully');
-                setFormData({
-                    product_id: '',
-                    entered_uom_id: '',
-                    quantity_for_uom_entered: '',
-                    supplier_id: '',
-                    batch_number: '',
-                    purchase_date: '',
-                    expiry_date: '',
-                    manufacturer: '',
-                    supplier_price: '',
-                    discounted_selling_price: '',
-                });
-                setSelectedProductOption(null);
-                setSelectedUomOption(null);
-                setSelectedSupplierOption(null);
-            } else {
-                toast.error(response.data.message || "Something went wrong.");
-            }
+            toast.success(response.data.message || 'Batch saved successfully');
+            setFormData({
+                product_id: '',
+                entered_uom_id: '',
+                quantity_for_uom_entered: '',
+                supplier_id: '',
+                batch_number: '',
+                purchase_date: '',
+                expiry_date: '',
+                manufacturer: '',
+                supplier_price: '',
+                discounted_selling_price: '',
+            });
+            setSelectedProductOption(null);
+            setSelectedUomOption(null);
+            setSelectedSupplierOption(null);
+
 
         } catch (error) {
             console.error("Submit error:", error);
-            toast.error("Failed to submit stock.");
+            const backendMessage =
+                error.response?.data?.message ||
+                error.response?.data?.error ||
+                (error.response?.data?.errors
+                    ? Object.values(error.response.data.errors).flat().join(' ')
+                    : null);
+
+            toast.error(backendMessage || "Failed to submit stock. Please try again.");
         } finally {
             setSubmitting(false);
         }
