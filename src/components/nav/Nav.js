@@ -7,7 +7,8 @@ import {
   Truck, Warehouse, Package, Ruler, ClipboardList, ShoppingCart, Banknote, CreditCard,
   SlidersHorizontal, PackagePlus, Boxes, RefreshCw, ScrollText,Bed,
   UserRound, CalendarCheck, CalendarDays, CalendarClock, CalendarRange,
-  Microscope, TestTube2, TestTube, ArrowLeftRight, Tag, Monitor, TrendingUp, Receipt, History
+  Microscope, TestTube2, TestTube, ArrowLeftRight, Tag, Monitor, TrendingUp, Receipt, History,
+  BarChart3, Stethoscope, LayoutDashboard
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from '../assets/i.png';
@@ -225,6 +226,17 @@ export function Nav({ isCollapsed, toggleSidebar, toggleTheme, theme }) {
         { label: "Invoices & payments", icon: FileText, link: "/invoices" },
         { label: "Payment Receipts", icon: Receipt, link: "/payment_receipts" },
       ]
+    },
+
+    // Reports
+    {
+      icon: BarChart3,
+      label: "Reports",
+      hasDropdown: true,
+      children: [
+        { icon: BarChart3,     label: "Dept. Performance",   link: "/reports" },
+        { icon: ClipboardList, label: "Medical History",     link: "/patient_medical_history" },
+      ],
     },
 
     { icon: History, label: "Activity Logs", link: "/activity_logs" },

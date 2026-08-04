@@ -7,7 +7,7 @@ import {
     Stethoscope, FlaskConical, Pill, Radiation, Scissors, ArrowRight,
     FileText, UserCheck, DoorOpen, Loader2, ShieldAlert, Zap, Circle, ShieldCheck,
     AlertTriangle, Thermometer, Heart, Activity, Wind, Hash, Info, BedDouble, BookOpen,
-    MapPin
+    MapPin, Scale
 } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
@@ -31,9 +31,11 @@ import { PatientTriagesHistory } from './patient_visit_sub_components/PatientTri
 import { AssignVisitToRoom } from './patient_visit_sub_components/AssignVisitToRoom';
 import { VisitRoutingStatus } from './patient_visit_sub_components/VisitRoutingStatus';
 import { FilterVisitsDrawer } from './patient_visit_sub_components/FilterVisitsDrawer';
+import { BMIRanges } from './patient_visit_sub_components/BMIRanges';
 
 // ── Import CreateVisitWizard to support when creating patient visit ───────────────────────
 import { CreateVisitWizard } from './CreateVisitWizard';
+import { classifyBmi } from './patient_visit_sub_components/triage_widgets/BmiRangeLegend';
 
 // ─── Status badge ──────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -161,6 +163,11 @@ export function PatientVisit() {
     const [isTriagesOpen, setIsTriagesOpen] = useState(false);
     const [triagesVisit, setTriagesVisit] = useState(null);
 
+    // Edit triage drawer
+    const [isEditTriageOpen, setIsEditTriageOpen] = useState(false);
+    const [editingTriageRecord, setEditingTriageRecord] = useState(null);
+    const [editTriageVisit, setEditTriageVisit] = useState(null);
+
     // Room assignment drawer
     const [isRoomOpen, setIsRoomOpen] = useState(false);
     const [roomVisit, setRoomVisit] = useState(null);
@@ -171,6 +178,9 @@ export function PatientVisit() {
 
     // Filter drawer
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // BMI Ranges configuration drawer
+    const [isBmiRangesOpen, setIsBmiRangesOpen] = useState(false);
     const [filters, setFilters] = useState({
         status: '',
         visit_category: '',
@@ -393,6 +403,16 @@ export function PatientVisit() {
                 onSuccess={() => fetchAllPatientVists(currentPage)}
             />
 
+            {/* ── Edit Triage Drawer ── */}
+            <AddTriageToPatientVisit
+                isOpen={isEditTriageOpen}
+                onClose={() => { setIsEditTriageOpen(false); setEditingTriageRecord(null); }}
+                visit={editTriageVisit}
+                token={token}
+                existingTriage={editingTriageRecord}
+                onSuccess={() => fetchAllPatientVists(currentPage)}
+            />
+
             {/* Examination History Card */}
             <PatientExaminationHistory
                 isOpen={isHistoryOpen}
@@ -451,6 +471,14 @@ export function PatientVisit() {
                 onApply={handleApplyFilters}
             />
 
+            {/* ── BMI Ranges Configuration Drawer ── */}
+            <BMIRanges
+                isOpen={isBmiRangesOpen}
+                onClose={() => setIsBmiRangesOpen(false)}
+                token={token}
+                onSuccess={() => { /* no visit refetch needed — this doesn't change visit data */ }}
+            />
+
             {/* ── Post-ward-assignment prompt ── */}
             {showWardSuccessPrompt && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -501,7 +529,7 @@ export function PatientVisit() {
             )}
 
             {/* Table to display patient visits */}
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border dark:bg-gradient-to-br dark:from-purple-900 dark:via-blue-900 dark:to-black p-8 transition-colors border-gray-200 dark:border-gray-700 mt-5">
+            <div className="bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 rounded-lg shadow-sm border p-8 transition-colors border-gray-200 dark:border-slate-700 mt-5">
 
                 {/* Header */}
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -539,14 +567,23 @@ export function PatientVisit() {
                         </div>
                     )}
 
-                    {/* Disable the button if role isnt admin or receptionisit */}
-                    <button
-                        onClick={() => setIsCreateOpen(true)}
-                        disabled={!canAddVisit}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors shadow text-white ${!canAddVisit ? 'bg-blue-400 cursor-not-allowed opacity-60' : 'bg-blue-600 hover:bg-blue-700'
-                            }`}>
-                        <Plus className="w-5 h-5" /> Add Patient Visit
-                    </button>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        {/* Disable the button if role isnt admin or receptionisit */}
+                        <button
+                            onClick={() => setIsCreateOpen(true)}
+                            disabled={!canAddVisit}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors shadow text-white ${!canAddVisit ? 'bg-blue-400 cursor-not-allowed opacity-60' : 'bg-blue-600 hover:bg-blue-700'
+                                }`}>
+                            <Plus className="w-5 h-5" /> Add Patient Visit
+                        </button>
+
+                        <button
+                            onClick={() => setIsBmiRangesOpen(true)}
+                            className="flex items-center gap-2 px-5 py-3 rounded-lg transition-colors shadow text-white bg-teal-600 hover:bg-teal-700"
+                        >
+                            <Scale className="w-4 h-4" /> Configure BMI Ranges
+                        </button>
+                    </div>
                 </div>
 
                 {/* ── Visit Insights ── */}
@@ -925,7 +962,23 @@ export function PatientVisit() {
                                                                         </div>
                                                                         <h4 className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Triage Info</h4>
                                                                     </div>
-                                                                    {visit.triage && <UrgencyBadge level={visit.triage?.urgency_level} />}
+                                                                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                                                        {visit.triage?.bmi_value && (() => {
+                                                                            const cat = visit.triage.bmi_category ?? classifyBmi(visit.triage.bmi_value);
+                                                                            const clsMap = {
+                                                                                underweight: 'bg-blue-600 text-white border-blue-700',
+                                                                                normal:      'bg-green-600 text-white border-green-700',
+                                                                                overweight:  'bg-yellow-500 text-gray-900 border-yellow-600',
+                                                                                obese:       'bg-red-600 text-white border-red-700',
+                                                                            };
+                                                                            return (
+                                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${clsMap[cat] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                                                    BMI {visit.triage.bmi_value}
+                                                                                </span>
+                                                                            );
+                                                                        })()}
+                                                                        {visit.triage && <UrgencyBadge level={visit.triage?.urgency_level} />}
+                                                                    </div>
                                                                 </div>
 
                                                                 {!visit.triage ? (
@@ -935,12 +988,44 @@ export function PatientVisit() {
                                                                     </div>
                                                                 ) : (
                                                                     <>
-                                                                        <div className="grid grid-cols-2 gap-2 mb-3">
-                                                                            <VitalTile icon={Activity} label="Blood Pressure" value={visit.triage.blood_pressure} unit="mmHg" iconCls="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400" />
-                                                                            <VitalTile icon={Thermometer} label="Temperature" value={visit.triage.temperature} unit="°C" iconCls="bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" />
-                                                                            <VitalTile icon={Heart} label="Pulse Rate" value={visit.triage.pulse_rate} unit="bpm" iconCls="bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400" />
-                                                                            <VitalTile icon={Wind} label="SpO₂" value={visit.triage.oxygen_saturation} unit="%" iconCls="bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400" />
+                                                                        {/* Array vitals as chip lists */}
+                                                                        {[
+                                                                            { icon: Activity,    label: 'Blood Pressure', readings: visit.triage.blood_pressure, fmt: v => `${v} mmHg`,           cls: 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400' },
+                                                                            { icon: Thermometer, label: 'Temperature',    readings: visit.triage.temperature,    fmt: r => `${r?.value ?? r}°C`,  cls: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' },
+                                                                            { icon: Heart,       label: 'Pulse Rate',     readings: visit.triage.pulse_rate,     fmt: v => `${v} bpm`,            cls: 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400' },
+                                                                        ].map(({ icon: Icon, label, readings, fmt, cls }) => {
+                                                                            const arr = Array.isArray(readings) ? readings : (readings != null ? [readings] : []);
+                                                                            if (!arr.length) return null;
+                                                                            return (
+                                                                                <div key={label} className="flex items-start gap-2 mb-2">
+                                                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${cls}`}>
+                                                                                        <Icon className="w-3 h-3" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium mb-0.5">{label}</p>
+                                                                                        <div className="flex flex-wrap gap-1">
+                                                                                            {arr.map((r, i) => (
+                                                                                                <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] font-semibold text-gray-700 dark:text-gray-200">
+                                                                                                    {fmt(r)}
+                                                                                                </span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+
+                                                                        {/* Scalar vitals */}
+                                                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                                                            <VitalTile icon={Wind}       label="SpO₂"            value={visit.triage.oxygen_saturation} unit="%"  iconCls="bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400" />
+                                                                            <VitalTile icon={Activity}   label="Weight"          value={visit.triage.weight}            unit="kg" iconCls="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400" />
+                                                                            <VitalTile icon={Activity}   label="Stand. Height"   value={visit.triage.standing_height}   unit="cm" iconCls="bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400" />
+                                                                            <VitalTile icon={Activity}   label="Sit. Height"     value={visit.triage.sitting_height}    unit="cm" iconCls="bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400" />
+                                                                            <VitalTile icon={Activity}   label="Waist"           value={visit.triage.waist}             unit="cm" iconCls="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
+                                                                            <VitalTile icon={Activity}   label="Hip"             value={visit.triage.hip}               unit="cm" iconCls="bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400" />
+                                                                            {visit.triage.muac && <VitalTile icon={Activity} label="MUAC" value={visit.triage.muac} unit="cm" iconCls="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400" />}
                                                                         </div>
+
                                                                         <div className="pt-2 border-t border-gray-50 dark:border-gray-800 space-y-0">
                                                                             <InfoRow label="Triaged by" value={visit.triage.triaged_by?.name} />
                                                                             <InfoRow label="Time" value={
@@ -949,6 +1034,22 @@ export function PatientVisit() {
                                                                                     : null
                                                                             } />
                                                                         </div>
+
+                                                                        {/* Edit Triage button */}
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setEditingTriageRecord(visit.triage);
+                                                                                setEditTriageVisit(visit);
+                                                                                setIsEditTriageOpen(true);
+                                                                            }}
+                                                                            className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                                                                                text-xs font-semibold text-white
+                                                                                bg-gradient-to-r from-orange-500 to-rose-500
+                                                                                hover:from-orange-600 hover:to-rose-600 transition shadow-sm"
+                                                                        >
+                                                                            <Edit2 className="w-3.5 h-3.5" /> Edit Triage
+                                                                        </button>
                                                                     </>
                                                                 )}
                                                             </div>

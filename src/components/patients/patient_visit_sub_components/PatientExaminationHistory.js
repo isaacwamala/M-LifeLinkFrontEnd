@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
     X, Search, Calendar, RefreshCw, Filter, ChevronLeft, ChevronRight,
     Stethoscope, User, FileText, Activity, AlertCircle, Loader2,
-    Clock, ClipboardList, FlaskConical, Pill, BookOpen, Hash
+    Clock, ClipboardList, FlaskConical, Pill, BookOpen, Hash, Building2
 } from 'lucide-react';
 import { API_BASE_URL } from '../../general/constants';
 import { toast } from 'react-toastify';
@@ -120,6 +120,14 @@ const ExaminationCard = ({ exam, index }) => {
                     <NoteField icon={FlaskConical}   label="Examination findings" value={note.examination_findings}   accent="teal" />
                     <NoteField icon={Activity}       label="Diagnosis"            value={note.diagnosis}              accent="indigo" />
                     <NoteField icon={Pill}           label="Treatment plan"       value={note.treatment_plan}         accent="violet" />
+                    <NoteField
+                        icon={Building2}
+                        label="Department routing plan"
+                        value={Array.isArray(note.visit_department_plan) && note.visit_department_plan.length
+                            ? note.visit_department_plan.join(', ')
+                            : null}
+                        accent="teal"
+                    />
                     <NoteField icon={ClipboardList}  label="Additional notes"     value={note.notes}                  accent="slate" />
                 </div>
             )}

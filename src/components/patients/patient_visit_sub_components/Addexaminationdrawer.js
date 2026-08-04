@@ -7,7 +7,7 @@ import axios from 'axios';
 import {
     X, Stethoscope, ClipboardList, FileText, Lightbulb,
     Activity, StickyNote, CheckCircle2, Loader2, ChevronDown, ChevronUp,
-    AlertCircle, FlaskConical, HeartPulse, AlertTriangle, Info, CheckCircle
+    AlertCircle, FlaskConical, HeartPulse, AlertTriangle, Info, CheckCircle, Building2
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../../general/constants';
@@ -111,6 +111,8 @@ export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess 
         examination_findings: '',
         diagnosis: '',
         treatment_plan: '',
+        department_plan: [],
+        department_plan_other: '',
         notes: '',
     };
 
@@ -154,15 +156,19 @@ export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess 
 
         setSubmitting(true);
         try {
+            const departmentPlan = [
+                ...form.department_plan,
+                ...(form.department_plan_other.trim() ? [form.department_plan_other.trim()] : []),
+            ];
+
             const payload = {
-                //when the drawer is called, the visit object is passed to it,
-                //  so we can get the visit id from there
                 patient_visit_id: visit.id,
                 chief_complaint: form.chief_complaint,
                 history_of_illness: form.history_of_illness,
                 examination_findings: form.examination_findings,
                 diagnosis: form.diagnosis,
                 treatment_plan: form.treatment_plan,
+                ...(departmentPlan.length > 0 && { visit_department_plan: departmentPlan }),
                 notes: form.notes,
             };
 
@@ -334,6 +340,45 @@ export function AddExaminationDrawer({ isOpen, onClose, visit, token, onSuccess 
                                 placeholder="e.g. Analgesia + IV fluids for hydration, rest in dark quiet room, review in 24 hrs…"
                                 className={textareaCls}
                             />
+                        </Field>
+                    </Section>
+
+                    {/* Department Routing Plan */}
+                    <Section icon={<Building2 className="w-4 h-4" />} title="Department Routing Plan" accent="teal" collapsible>
+                        <Field label="Where should this visit be routed next?" hint="Optional — select any departments the doctor expects this visit to go to">
+                            <div className="space-y-2">
+                                {['Pharmacy', 'Laboratory', 'Radiology'].map(dept => {
+                                    const checked = form.department_plan.includes(dept);
+                                    return (
+                                        <label
+                                            key={dept}
+                                            className="flex items-center gap-3 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors select-none"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() =>
+                                                    setForm(prev => ({
+                                                        ...prev,
+                                                        department_plan: checked
+                                                            ? prev.department_plan.filter(d => d !== dept)
+                                                            : [...prev.department_plan, dept],
+                                                    }))
+                                                }
+                                                className="w-4 h-4 rounded text-teal-600 border-gray-300 dark:border-gray-600 focus:ring-teal-500"
+                                            />
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">{dept}</span>
+                                        </label>
+                                    );
+                                })}
+                                <input
+                                    type="text"
+                                    value={form.department_plan_other}
+                                    onChange={e => setForm(prev => ({ ...prev, department_plan_other: e.target.value }))}
+                                    placeholder="Other (specify)"
+                                    className={inputCls}
+                                />
+                            </div>
                         </Field>
                     </Section>
 

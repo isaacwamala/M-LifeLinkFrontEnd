@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
     ChevronDown, ChevronUp, Search, Calendar, Filter, RefreshCw, Plus, Edit2,
     HandCoins, X, User, Phone, ChevronRight, ChevronLeft,
-    UserPlus, UserCheck, ArrowRight, CheckCircle2, ExternalLink, ReceiptText
+    UserPlus, UserCheck, ArrowRight, CheckCircle2, ExternalLink, ReceiptText, ClipboardList
 } from 'lucide-react';
 import { API_BASE_URL } from '../general/constants';
 import Skeleton from "react-loading-skeleton";
@@ -21,6 +21,62 @@ import { AddPatientDeposit } from './patients_sub_components/AddPatientDeposit';
 import { PatientDepositHistory } from './patients_sub_components/PatientDepositHistory';
 import { PatientFinancialStatementDrawer } from './patients_sub_components/PatientFinancialStatementDrawer';
 
+// ── Medical history report ────────────────────────────────────────────────────
+import { PatientMedicalHistoryReport } from './patients_sub_components/PatientMedicalHistoryReport';
+
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const KNOWN_NATIONALITIES = ['Uganda', 'Kenya', 'Tanzania', 'Rwanda', 'Burundi', 'South Sudan'];
+
+const NOK_RELATIONSHIPS = [
+    { label: 'Spouse',   value: 'spouse' },
+    { label: 'Parent',   value: 'parent' },
+    { label: 'Sibling',  value: 'sibling' },
+    { label: 'Child',    value: 'child' },
+    { label: 'Guardian', value: 'guardian' },
+    { label: 'Friend',   value: 'friend' },
+    { label: 'Other',    value: 'other' },
+];
+
+const EMPTY_KIN = () => ({ id: null, name: '', location: '', phone_number: '', email: '', gender: '', relationship: '' });
+
+// ── Date helpers (all dates computed in EAT = UTC+3) ─────────────────────────
+function nowInEAT() {
+    // Shift UTC epoch to East Africa Time (UTC+3) then build a plain Date
+    // whose .getFullYear()/.getMonth()/.getDate() read as EAT wall-clock values.
+    const utcMs  = Date.now();
+    const eatMs  = utcMs + 3 * 60 * 60 * 1000; // +3 h
+    return new Date(eatMs);
+}
+
+function todayDate() {
+    const eat   = nowInEAT();
+    const y     = eat.getUTCFullYear();
+    const m     = String(eat.getUTCMonth() + 1).padStart(2, '0');
+    const d     = String(eat.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function ageFromDob(dobStr) {
+    // Parse dob as a local calendar date (no time component) to avoid DST shifts
+    const [dy, dm, dd] = dobStr.split('-').map(Number);
+    const eat = nowInEAT();
+    const ty  = eat.getUTCFullYear();
+    const tm  = eat.getUTCMonth() + 1; // 1-based
+    const td  = eat.getUTCDate();
+    let age = ty - dy;
+    // Subtract 1 if birthday hasn't occurred yet this year in EAT
+    if (tm < dm || (tm === dm && td < dd)) age--;
+    return Math.max(0, age);
+}
+
+function dobFromAge(age) {
+    const eat  = nowInEAT();
+    const year = eat.getUTCFullYear() - Number(age);
+    const m    = String(eat.getUTCMonth() + 1).padStart(2, '0');
+    const d    = String(eat.getUTCDate()).padStart(2, '0');
+    return `${year}-${m}-${d}`;
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  ENTRY-POINT CHOOSER MODAL
@@ -173,6 +229,16 @@ export function Patients() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingPatient, setEditingPatient] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+
+    // DOB↔Age mutual lock: null | 'dob' | 'age'
+    const [ageDobLockSource, setAgeDobLockSource] = useState(null);
+
+    // Nationality select value (separate from formData.nationality to handle "Other")
+    const [nationalitySelect, setNationalitySelect] = useState('');
+
+    // Next of kin list (max 2)
+    const [nextOfKin, setNextOfKin] = useState([]);
+
     const [formData, setFormData] = useState({
         name: '', nin: '', dob: '', gender: '', patient_category_id: '', branch_id: '', admission_date: '',
         nationality: '', email: '', phone_number: '', occupation: '', marital_status: '',
@@ -211,6 +277,10 @@ export function Patients() {
     // inside the Insurance & Admin card alongside six other fields.
     const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
     const [balancePatient, setBalancePatient] = useState(null);
+
+    // ── Medical history modal state ─────────────────────────────────────────────
+    const [isMedicalHistoryOpen, setIsMedicalHistoryOpen] = useState(false);
+    const [medicalHistoryPatient, setMedicalHistoryPatient] = useState(null);
 
     // ── Data fetching ──────────────────────────────────────────────────────────
     const fetchAllPatients = async (page = 1, search = searchTerm) => {
@@ -270,12 +340,28 @@ export function Patients() {
     const openModal = (patient = null) => {
         if (patient) {
             setEditingPatient(patient);
+            const nat = patient.nationality || '';
+            setNationalitySelect(KNOWN_NATIONALITIES.includes(nat) ? nat : (nat ? 'Other' : ''));
+            setAgeDobLockSource(patient.dob ? 'dob' : null);
+            setNextOfKin(
+                Array.isArray(patient.next_of_kin) && patient.next_of_kin.length > 0
+                    ? patient.next_of_kin.map(k => ({
+                        id:           k.id   ?? null,
+                        name:         k.name         || '',
+                        location:     k.location     || '',
+                        phone_number: k.phone_number || '',
+                        email:        k.email        || '',
+                        gender:       k.gender       || '',
+                        relationship: k.relationship || '',
+                    }))
+                    : []
+            );
             setFormData({
                 patient_id: patient.id,
                 name: patient.name || '', nin: patient.nin || '', dob: patient.dob || '',
                 gender: patient.gender || '', patient_category_id: patient.patient_category_id?.toString() || '',
                 branch_id: patient.branch_id?.toString() || '', admission_date: patient.admission_date || '',
-                nationality: patient.nationality || '', email: patient.email || '',
+                nationality: nat, email: patient.email || '',
                 phone_number: patient.phone_number || '', occupation: patient.occupation || '',
                 marital_status: patient.marital_status || '', insurance_number: patient.insurance_number || '',
                 insurance_provider: patient.insurance_provider || '', is_insured: patient.is_insured ?? '',
@@ -288,8 +374,12 @@ export function Patients() {
             });
         } else {
             setEditingPatient(null);
+            setNationalitySelect('');
+            setAgeDobLockSource(null);
+            setNextOfKin([]);
             setFormData({
-                name: '', nin: '', dob: '', gender: '', patient_category_id: '', branch_id: '', admission_date: '',
+                name: '', nin: '', dob: '', gender: '', patient_category_id: '', branch_id: '',
+                admission_date: todayDate(),
                 nationality: '', email: '', phone_number: '', occupation: '', marital_status: '',
                 insurance_number: '', insurance_provider: '', is_insured: '', area_of_workspace: '',
                 address: '', residence: '', subcounty: '', district: '', age: '',
@@ -300,16 +390,38 @@ export function Patients() {
         setIsModalOpen(true);
     };
 
-    const closeModal = () => { setIsModalOpen(false); setEditingPatient(null); };
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingPatient(null);
+        setAgeDobLockSource(null);
+        setNationalitySelect('');
+        setNextOfKin([]);
+    };
+
+    // ── NOK helpers ───────────────────────────────────────────────────────────
+    const updateKin  = (idx, field, value) =>
+        setNextOfKin(prev => prev.map((k, i) => i === idx ? { ...k, [field]: value } : k));
+    const removeKin  = (idx) => setNextOfKin(prev => prev.filter((_, i) => i !== idx));
+    const addKin     = () => { if (nextOfKin.length < 2) setNextOfKin(prev => [...prev, EMPTY_KIN()]); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Client-side NOK validation
+        for (const [i, kin] of nextOfKin.entries()) {
+            if (!kin.name.trim() || !kin.phone_number.trim() || !kin.relationship) {
+                toast.error(`Next of Kin #${i + 1}: Name, Phone Number, and Relationship are required.`, { autoClose: 5000 });
+                return;
+            }
+        }
+
         setSubmitting(true);
 
         const payload = {
             ...formData,
             is_insured: formData.is_insured === '' ? null : Number(formData.is_insured),
             patient_category_id: formData.patient_category_id || null,
+            next_of_kin: nextOfKin,
         };
 
         const url = editingPatient
@@ -397,6 +509,8 @@ export function Patients() {
     const openBalanceModal = (patient) => { setBalancePatient(patient); setIsBalanceModalOpen(true); };
     const openStatementDrawer = (patient) => { setStatementPatient(patient); setIsStatementOpen(true); };
     const closeBalanceModal = () => { setIsBalanceModalOpen(false); setBalancePatient(null); };
+    const openMedicalHistory = (patient) => { setMedicalHistoryPatient(patient); setIsMedicalHistoryOpen(true); };
+    const closeMedicalHistory = () => { setIsMedicalHistoryOpen(false); setMedicalHistoryPatient(null); };
 
     const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -740,10 +854,44 @@ export function Patients() {
                                         {/* EXPANDED ROW WITH MORE PATIENT INFORMATION */}
                                         {expandedRows.has(patient.patient_number) && (
                                             <tr>
-                                                <td colSpan={9} className="px-0 py-0 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                                                <td colSpan={9} className="px-0 py-0 bg-indigo-50/70 dark:bg-indigo-950/40 border-b-2 border-indigo-200 dark:border-indigo-800">
 
-                                                    {/* Colored top accent bar */}
-                                                    <div className="h-0.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" />
+                                                    {/* ── Patient identity + action buttons header ── */}
+                                                    <div className="px-5 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-indigo-200/60 dark:border-indigo-800/60 bg-indigo-100/60 dark:bg-indigo-900/30">
+                                                        {/* Identity */}
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <div className="w-8 h-8 rounded-full bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow">
+                                                                {patient.name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100 truncate">{patient.name}</p>
+                                                                <p className="text-xs text-indigo-500 dark:text-indigo-400">{patient.patient_number} · <span className="capitalize">{patient.gender}</span></p>
+                                                            </div>
+                                                        </div>
+                                                        {/* Action buttons */}
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <button onClick={e => { e.stopPropagation(); openBalanceModal(patient); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 transition shadow-sm">
+                                                                <HandCoins className="w-3.5 h-3.5" /> View Balance
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); openDepositDrawer(patient); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition shadow-sm">
+                                                                <Plus className="w-3.5 h-3.5" /> Add Deposit
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); openDepositHistoryDrawer(patient); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition shadow-sm">
+                                                                <ChevronRight className="w-3.5 h-3.5" /> Deposit History
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); openStatementDrawer(patient); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 transition shadow-sm">
+                                                                <ReceiptText className="w-3.5 h-3.5" /> Financial Statement
+                                                            </button>
+                                                            <button onClick={e => { e.stopPropagation(); openMedicalHistory(patient); }}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition shadow-sm">
+                                                                <ClipboardList className="w-3.5 h-3.5" /> Medical History
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
                                                     <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
 
@@ -886,41 +1034,47 @@ export function Patients() {
 
                                                     </div>
 
-                                                    {/* ── Deposit action buttons ── */}
-                                                    <div className="px-5 pb-4 flex flex-wrap gap-2">
-                                                        <button
-                                                            onClick={e => { e.stopPropagation(); openBalanceModal(patient); }}
-                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
-                                                                bg-gradient-to-r from-amber-500 to-orange-600
-                                                                hover:from-amber-600 hover:to-orange-700 transition shadow-sm"
-                                                        >
-                                                            <HandCoins className="w-3.5 h-3.5" /> View Balance
-                                                        </button>
-                                                        <button
-                                                            onClick={e => { e.stopPropagation(); openDepositDrawer(patient); }}
-                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
-                                                                bg-gradient-to-r from-emerald-600 to-teal-600
-                                                                hover:from-emerald-700 hover:to-teal-700 transition shadow-sm"
-                                                        >
-                                                            <Plus className="w-3.5 h-3.5" /> Add Deposit
-                                                        </button>
-                                                        <button
-                                                            onClick={e => { e.stopPropagation(); openDepositHistoryDrawer(patient); }}
-                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
-                                                                bg-gradient-to-r from-violet-600 to-indigo-600
-                                                                hover:from-violet-700 hover:to-indigo-700 transition shadow-sm"
-                                                        >
-                                                            <ChevronRight className="w-3.5 h-3.5" /> Deposit History
-                                                        </button>
-                                                        <button
-                                                            onClick={e => { e.stopPropagation(); openStatementDrawer(patient); }}
-                                                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white
-                                                                bg-gradient-to-r from-blue-600 to-cyan-600
-                                                                hover:from-blue-700 hover:to-cyan-700 transition shadow-sm"
-                                                        >
-                                                            <ReceiptText className="w-3.5 h-3.5" /> Financial Statement
-                                                        </button>
+                                                    {/* ── 5. Next of Kin ── */}
+                                                    <div className="mx-5 mb-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                                        <div className="px-4 py-2.5 bg-teal-50 dark:bg-teal-900/20 border-b border-teal-100 dark:border-teal-800 flex items-center gap-2">
+                                                            <User className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                                                            <span className="text-xs font-bold text-teal-700 dark:text-teal-300 uppercase tracking-wide">Next of Kin</span>
+                                                        </div>
+
+                                                        {!patient.next_of_kin?.length ? (
+                                                            <div className="p-4 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+                                                                <User className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                                                                No next-of-kin recorded
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                {patient.next_of_kin.map((kin, i) => (
+                                                                    <div key={kin.id ?? i} className="border border-gray-100 dark:border-gray-800 rounded-lg p-3 space-y-1.5">
+                                                                        {/* Name hero */}
+                                                                        <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100 dark:border-gray-800">
+                                                                            <div className="w-6 h-6 rounded-full bg-teal-100 dark:bg-teal-900/40 flex items-center justify-center text-teal-600 dark:text-teal-400 text-xs font-bold flex-shrink-0">
+                                                                                {(kin.name ?? '?').charAt(0).toUpperCase()}
+                                                                            </div>
+                                                                            <span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{kin.name}</span>
+                                                                            <span className="ml-auto text-[10px] capitalize text-teal-600 dark:text-teal-400 font-medium shrink-0">{kin.relationship}</span>
+                                                                        </div>
+                                                                        {[
+                                                                            { label: 'Phone',    value: kin.phone_number },
+                                                                            { label: 'Gender',   value: kin.gender },
+                                                                            { label: 'Location', value: kin.location },
+                                                                            { label: 'Email',    value: kin.email },
+                                                                        ].map(({ label, value }) => value ? (
+                                                                            <div key={label} className="flex items-center justify-between gap-2">
+                                                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">{label}</span>
+                                                                                <span className="text-[10px] font-medium text-gray-700 dark:text-gray-200 text-right truncate max-w-[60%] capitalize">{value}</span>
+                                                                            </div>
+                                                                        ) : null)}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
+
                                                 </td>
                                             </tr>
                                         )}
@@ -948,6 +1102,45 @@ export function Patients() {
                 </div>
             </div>
 
+
+            {/* ══ MEDICAL HISTORY MODAL ══ */}
+            {isMedicalHistoryOpen && medicalHistoryPatient && (
+                <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl my-6 overflow-hidden">
+                        {/* Header */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4
+                            bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40
+                                    flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-sm flex-shrink-0">
+                                    {medicalHistoryPatient.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">
+                                        Medical History — {medicalHistoryPatient.name}
+                                    </p>
+                                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                                        Full lifetime report
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={closeMedicalHistory}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200
+                                    hover:bg-gray-100 dark:hover:bg-gray-800 transition flex-shrink-0">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="p-5">
+                            <PatientMedicalHistoryReport
+                                patientId={medicalHistoryPatient.id}
+                                patientName={medicalHistoryPatient.name}
+                                onClose={closeMedicalHistory}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ══ PATIENT REGISTRATION / EDIT MODAL ══ */}
             {isModalOpen && (
@@ -987,17 +1180,55 @@ export function Patients() {
                                             className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
                                     </div>
                                     <div>
-                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Date of Birth</label>
-                                        <input type="date" value={formData.dob}
-                                            onChange={e => setFormData({ ...formData, dob: e.target.value })}
-                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-gray-700 dark:text-gray-300">Date of Birth</label>
+                                            {ageDobLockSource === 'age' && (
+                                                <button type="button" onClick={() => setAgeDobLockSource(null)}
+                                                    className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">
+                                                    change
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="date"
+                                            value={formData.dob}
+                                            disabled={ageDobLockSource === 'age'}
+                                            onChange={e => {
+                                                const dob = e.target.value;
+                                                if (dob) {
+                                                    setFormData(f => ({ ...f, dob, age: ageFromDob(dob) }));
+                                                    setAgeDobLockSource('dob');
+                                                } else {
+                                                    setFormData(f => ({ ...f, dob: '' }));
+                                                }
+                                            }}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed" />
                                     </div>
 
                                     <div>
-                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Age</label>
-                                        <input type="number" value={formData.age}
-                                            onChange={e => setFormData({ ...formData, age: e.target.value })}
-                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-gray-700 dark:text-gray-300">Age</label>
+                                            {ageDobLockSource === 'dob' && (
+                                                <button type="button" onClick={() => setAgeDobLockSource(null)}
+                                                    className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">
+                                                    change
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="number"
+                                            value={formData.age}
+                                            disabled={ageDobLockSource === 'dob'}
+                                            onChange={e => {
+                                                const age = e.target.value;
+                                                if (age !== '') {
+                                                    setFormData(f => ({ ...f, age, dob: dobFromAge(age) }));
+                                                    setAgeDobLockSource('age');
+                                                } else {
+                                                    setFormData(f => ({ ...f, age: '' }));
+                                                }
+                                            }}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed" />
                                     </div>
 
                                     <div>
@@ -1009,9 +1240,26 @@ export function Patients() {
 
                                     <div>
                                         <label className="block text-gray-700 dark:text-gray-300 mb-2">Nationality</label>
-                                        <input type="text" required value={formData.nationality}
-                                            onChange={e => setFormData({ ...formData, nationality: e.target.value })}
-                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500" />
+                                        <select
+                                            value={nationalitySelect}
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                setNationalitySelect(val);
+                                                if (val !== 'Other') setFormData(f => ({ ...f, nationality: val }));
+                                            }}
+                                            className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500">
+                                            <option value="">Select Nationality</option>
+                                            {KNOWN_NATIONALITIES.map(n => <option key={n} value={n}>{n}</option>)}
+                                            <option value="Other">Other</option>
+                                        </select>
+                                        {nationalitySelect === 'Other' && (
+                                            <input
+                                                type="text"
+                                                placeholder="Specify nationality"
+                                                value={formData.nationality}
+                                                onChange={e => setFormData(f => ({ ...f, nationality: e.target.value }))}
+                                                className="mt-2 w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500" />
+                                        )}
                                     </div>
 
                                     <div>
@@ -1057,9 +1305,16 @@ export function Patients() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-gray-700 dark:text-gray-300 mb-2">Admission Date</label>
-                                        <input type="datetime-local" value={formData.admission_date}
-                                            onChange={e => setFormData({ ...formData, admission_date: e.target.value })}
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-gray-700 dark:text-gray-300">Admission Date</label>
+                                            <button type="button"
+                                                onClick={() => setFormData(f => ({ ...f, admission_date: todayDate() }))}
+                                                className="text-xs text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline">
+                                                Today
+                                            </button>
+                                        </div>
+                                        <input type="date" value={formData.admission_date}
+                                            onChange={e => setFormData(f => ({ ...f, admission_date: e.target.value }))}
                                             className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
                                     </div>
                                 </div>
@@ -1100,16 +1355,79 @@ export function Patients() {
                                 </div>
                             </section>
 
+                            {/* ── Next of Kin ─────────────────────────────────────────────────── */}
                             <section>
-                                <h3 className="text-md font-semibold text-gray-800 dark:text-white mb-4">Emergency Contact</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <input placeholder="Contact Name" value={formData.emergency_contact_name}
-                                        onChange={e => setFormData({ ...formData, emergency_contact_name: e.target.value })}
-                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
-                                    <input placeholder="Contact Phone" value={formData.emergency_contact_phone}
-                                        onChange={e => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
-                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-md font-semibold text-gray-800 dark:text-white">Next of Kin</h3>
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">Up to 2 contacts</span>
                                 </div>
+
+                                <div className="space-y-4">
+                                    {nextOfKin.map((kin, idx) => (
+                                        <div key={idx} className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                            <button type="button" onClick={() => removeKin(idx)}
+                                                className="absolute top-3 right-3 text-red-400 hover:text-red-600 transition-colors" title="Remove">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">
+                                                Contact {idx + 1}
+                                            </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Name *</label>
+                                                    <input type="text" value={kin.name}
+                                                        onChange={e => updateKin(idx, 'name', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Relationship *</label>
+                                                    <select value={kin.relationship} onChange={e => updateKin(idx, 'relationship', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white">
+                                                        <option value="">Select</option>
+                                                        {NOK_RELATIONSHIPS.map(r => (
+                                                            <option key={r.value} value={r.value}>{r.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Phone Number *</label>
+                                                    <input type="text" value={kin.phone_number}
+                                                        onChange={e => updateKin(idx, 'phone_number', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Gender</label>
+                                                    <select value={kin.gender} onChange={e => updateKin(idx, 'gender', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white">
+                                                        <option value="">Select</option>
+                                                        <option value="male">Male</option>
+                                                        <option value="female">Female</option>
+                                                        <option value="other">Other</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Location</label>
+                                                    <input type="text" value={kin.location}
+                                                        onChange={e => updateKin(idx, 'location', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-700 dark:text-gray-300 mb-1 text-sm">Email</label>
+                                                    <input type="email" value={kin.email}
+                                                        onChange={e => updateKin(idx, 'email', e.target.value)}
+                                                        className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {nextOfKin.length < 2 && (
+                                    <button type="button" onClick={addKin}
+                                        className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                                        <Plus className="w-4 h-4" /> Add Next of Kin
+                                    </button>
+                                )}
                             </section>
 
                             <div className="flex justify-end gap-3 pt-4 border-t border-gray-300 dark:border-gray-600">

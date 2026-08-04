@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../../general/constants';
+import { classifyBmi, categoryColor } from './triage_widgets/BmiRangeLegend';
 
 /* ─── Urgency badge ────────────────────────────────────────────────────── */
 function UrgencyBadge({ level }) {
@@ -47,7 +48,7 @@ function UrgencyBadge({ level }) {
 
 /* ─── Vital sign pill ──────────────────────────────────────────────────── */
 function VitalPill({ icon: Icon, label, value, unit }) {
-    if (value === null || value === undefined) return null;
+    if (value === null || value === undefined || value === '') return null;
     return (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/60
             border border-gray-100 dark:border-gray-700">
@@ -64,13 +65,47 @@ function VitalPill({ icon: Icon, label, value, unit }) {
     );
 }
 
+/* ─── Array vital chip list ─────────────────────────────────────────────── */
+function ArrayVitalPill({ icon: Icon, label, readings, formatFn }) {
+    const arr = Array.isArray(readings) ? readings : (readings != null ? [readings] : []);
+    if (!arr.length) return null;
+    return (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/60
+            border border-gray-100 dark:border-gray-700 col-span-2 sm:col-span-1">
+            <Icon className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 leading-none mb-1">
+                    {label}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                    {arr.map((r, i) => (
+                        <span key={i} className="inline-block px-1.5 py-0.5 rounded bg-white dark:bg-gray-700
+                            border border-gray-200 dark:border-gray-600 text-[10px] font-semibold text-gray-700 dark:text-gray-200">
+                            {formatFn ? formatFn(r) : String(r)}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 /* ─── Single triage card ───────────────────────────────────────────────── */
 function TriageCard({ triage, index }) {
-    const triagedBy     = triage.triaged_by?.name ?? '—';
-    const visitNumber   = triage.visit?.visit_number ?? '—';
-    const triageDate    = triage.triage_date
+    const triagedBy   = triage.triaged_by?.name ?? '—';
+    const visitNumber = triage.visit?.visit_number ?? '—';
+    const triageDate  = triage.triage_date
         ? new Date(triage.triage_date).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' })
         : '—';
+
+    // BMI category colour
+    const bmiCategory = triage.bmi_category ?? classifyBmi(triage.bmi_value);
+    const bmiCls = {
+        underweight: 'bg-blue-600 text-white border-blue-700',
+        normal:      'bg-green-600 text-white border-green-700',
+        overweight:  'bg-yellow-500 text-gray-900 border-yellow-600',
+        obese:       'bg-red-600 text-white border-red-700',
+    }[bmiCategory] ?? 'bg-gray-200 text-gray-700 border-gray-300';
 
     return (
         <div className="rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900
@@ -90,10 +125,17 @@ function TriageCard({ triage, index }) {
                         <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{visitNumber}</span>
                     </div>
                 </div>
-                <UrgencyBadge level={triage.urgency_level} />
+                <div className="flex items-center gap-2">
+                    {triage.bmi_value && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${bmiCls}`}>
+                            BMI {triage.bmi_value} · {bmiCategory}
+                        </span>
+                    )}
+                    <UrgencyBadge level={triage.urgency_level} />
+                </div>
             </div>
 
-            {/* meta row — triaged by + date */}
+            {/* meta row */}
             <div className="flex items-center gap-4 px-4 pt-3 pb-2">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <User className="w-3 h-3 text-rose-400" />
@@ -117,14 +159,25 @@ function TriageCard({ triage, index }) {
                 </div>
             )}
 
-            {/* vitals grid */}
+            {/* array vitals */}
+            <div className="px-4 pb-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <ArrayVitalPill icon={Heart}       label="Blood Pressure" readings={triage.blood_pressure}
+                    formatFn={v => `${v} mmHg`} />
+                <ArrayVitalPill icon={Thermometer} label="Temperature"    readings={triage.temperature}
+                    formatFn={r => `${r?.value ?? r}°C (${r?.method ?? ''})`} />
+                <ArrayVitalPill icon={Activity}    label="Pulse Rate"     readings={triage.pulse_rate}
+                    formatFn={v => `${v} bpm`} />
+            </div>
+
+            {/* scalar vitals + anthropometrics */}
             <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <VitalPill icon={Heart}       label="Blood Pressure"    value={triage.blood_pressure}    unit="" />
-                <VitalPill icon={Thermometer} label="Temperature"       value={triage.temperature}       unit="°C" />
-                <VitalPill icon={Activity}    label="Pulse Rate"        value={triage.pulse_rate}         unit="bpm" />
-                <VitalPill icon={Wind}        label="O₂ Saturation"     value={triage.oxygen_saturation} unit="%" />
-                <VitalPill icon={Weight}      label="Weight"            value={triage.weight}            unit="kg" />
-                <VitalPill icon={Ruler}       label="Height"            value={triage.height}            unit="cm" />
+                <VitalPill icon={Wind}   label="O₂ Saturation"    value={triage.oxygen_saturation} unit="%" />
+                <VitalPill icon={Weight} label="Weight"            value={triage.weight}            unit="kg" />
+                <VitalPill icon={Ruler}  label="Standing Height"   value={triage.standing_height}   unit="cm" />
+                <VitalPill icon={Ruler}  label="Sitting Height"    value={triage.sitting_height}    unit="cm" />
+                <VitalPill icon={Ruler}  label="Waist"             value={triage.waist}             unit="cm" />
+                <VitalPill icon={Ruler}  label="Hip"               value={triage.hip}               unit="cm" />
+                <VitalPill icon={Ruler}  label="MUAC"              value={triage.muac}              unit="cm" />
             </div>
 
             {/* notes */}

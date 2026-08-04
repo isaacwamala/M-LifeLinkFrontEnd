@@ -76,6 +76,10 @@ import VariantOptionsManager from "./components/configurations/VariantOptionsMan
 // Activity Logs
 import GeneralActivityLogsViewer from "./components/activitylogs/GeneralActivityLogsViewer.js";
 
+// Reports
+import { ReportsPage }                from "./components/reports/ReportsPage.js";
+import { PatientMedicalHistoryPage }  from "./components/reports/PatientMedicalHistoryPage.js";
+
 //appointments
 import AdminDashboard from "./components/dashboard/AdminDashboard.js";
 import DoctorDashboard from "./components/dashboard/DoctorDashboard.js";
@@ -214,6 +218,10 @@ function App() {
 
                 {/* Activity Logs */}
                 <Route path="/activity_logs" element={<GeneralActivityLogsViewer />} />
+
+                {/* Reports */}
+                <Route path="/reports"                    element={<ReportsPage />} />
+                <Route path="/patient_medical_history"    element={<PatientMedicalHistoryPage />} />
 
                 //Appointments
                 <Route path="/appointments/management" element={<AppointmentsManager />} />

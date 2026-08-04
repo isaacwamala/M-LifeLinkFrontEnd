@@ -9,8 +9,12 @@ import {
     Plus, X, User, FileText, Clock, DoorOpen, ShieldAlert, CheckCircle2,
     ChevronLeft, ChevronRight, Loader2, ArrowRight, UserCheck, Stethoscope,
     FlaskConical, BedDouble, Info, Activity, Thermometer, Heart, Wind, Hash,
-    AlertTriangle, Zap, Circle, Building2
+    AlertTriangle, Zap, Circle, Building2, ClipboardList
 } from 'lucide-react';
+import BmiCalculatorPanel  from './patient_visit_sub_components/triage_widgets/BmiCalculatorPanel';
+import MultiReadingField   from './patient_visit_sub_components/triage_widgets/MultiReadingField';
+import BloodPressureRow    from './patient_visit_sub_components/triage_widgets/BloodPressureRow';
+import PulseRateRow        from './patient_visit_sub_components/triage_widgets/PulseRateRow';
 import { toast } from 'react-toastify';
 import { API_BASE_URL } from '../general/constants';
 
@@ -89,9 +93,18 @@ export function CreateVisitWizard({ isOpen, onClose, onSuccess, token, patients 
     });
     const [addTriage, setAddTriage] = useState(false);
     const [triage, setTriage] = useState({
-        urgency_level: 'routine', chief_complaint: '',
-        temperature: '', pulse_rate: '', oxygen_saturation: '',
-        blood_pressure: '', respiratory_rate: '',
+        urgency_level:     'routine',
+        chief_complaint:   '',
+        temperature:       { method: 'axillary', value: '' },
+        pulse_rate:        [],   // array of decimal strings
+        oxygen_saturation: '',
+        blood_pressure:    [],   // array of "sys/dia" strings
+        weight:            '',
+        standing_height:   '',
+        sitting_height:    '',
+        waist:             '',
+        hip:               '',
+        muac:              '',
     });
 
     // Sync lockedPatient into form whenever it changes
@@ -112,7 +125,7 @@ export function CreateVisitWizard({ isOpen, onClose, onSuccess, token, patients 
                 visit_date: new Date().toISOString().split('T')[0],
                 assigned_doctor_id: ''
             });
-            setTriage({ urgency_level: 'routine', chief_complaint: '', temperature: '', pulse_rate: '', oxygen_saturation: '', blood_pressure: '', respiratory_rate: '' });
+            setTriage({ urgency_level: 'routine', chief_complaint: '', temperature: { method: 'axillary', value: '' }, pulse_rate: [], oxygen_saturation: '', blood_pressure: [], weight: '', standing_height: '', sitting_height: '', waist: '', hip: '', muac: '' });
         }
     }, [isOpen, lockedPatient]);
 
@@ -158,9 +171,22 @@ export function CreateVisitWizard({ isOpen, onClose, onSuccess, token, patients 
                 ...(form.assigned_doctor_id && { assigned_doctor_id: Number(form.assigned_doctor_id) }),
                 ...(isOthers && { request_origin: form.request_origin }),
                 ...(addTriage && {
-                    triage: Object.fromEntries(
-                        Object.entries(triage).filter(([, v]) => v !== '' && v !== null)
-                    ),
+                    triage: {
+                        urgency_level:     triage.urgency_level     || undefined,
+                        chief_complaint:   triage.chief_complaint   || undefined,
+                        oxygen_saturation: triage.oxygen_saturation || undefined,
+                        weight:            triage.weight            || undefined,
+                        standing_height:   triage.standing_height   || undefined,
+                        sitting_height:    triage.sitting_height    || undefined,
+                        waist:             triage.waist             || undefined,
+                        hip:               triage.hip               || undefined,
+                        muac:              triage.muac              || undefined,
+                        // Send first reading only; backend wraps it in a single-element array
+                        blood_pressure:    triage.blood_pressure[0] || undefined,
+                        pulse_rate:        triage.pulse_rate[0]     || undefined,
+                        // Temperature requires {value, method}; only include if value is set
+                        ...(triage.temperature?.value ? { temperature: triage.temperature } : {}),
+                    },
                 }),
             };
             const res = await axios.post(
@@ -504,36 +530,107 @@ export function CreateVisitWizard({ isOpen, onClose, onSuccess, token, patients 
                                         </WizardField>
                                     </WizardCard>
                                     <WizardCard icon={<Activity className="w-4 h-4 text-rose-500" />} title="Vital Signs" subtitle="All vital fields are optional" accent="amber">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <WizardField label="Temperature (°C)" hint="Normal: 36.1–37.2°C">
-                                                <div className="relative">
-                                                    <Thermometer className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
-                                                    <input type="number" step="0.1" value={triage.temperature} onChange={e => setTriage({ ...triage, temperature: e.target.value })} placeholder="38.2" className={`${inputCls} pl-9`} />
+                                        <div className="space-y-4">
+                                            {/* Temperature with method */}
+                                            <WizardField label="Temperature" hint="Select measurement method and enter value">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <select
+                                                        value={triage.temperature?.method ?? 'axillary'}
+                                                        onChange={e => setTriage({ ...triage, temperature: { ...triage.temperature, method: e.target.value } })}
+                                                        className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                                    >
+                                                        {['axillary','oral','rectal','tympanic','skin','temporal'].map(m => (
+                                                            <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="relative flex-1 min-w-[120px]">
+                                                        <Thermometer className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                                                        <input type="number" step="0.1"
+                                                            value={triage.temperature?.value ?? ''}
+                                                            onChange={e => setTriage({ ...triage, temperature: { ...triage.temperature, value: e.target.value } })}
+                                                            placeholder="e.g. 37.2"
+                                                            className={`${inputCls} pl-9`}
+                                                        />
+                                                    </div>
+                                                    <span className="text-xs text-gray-400">°C</span>
                                                 </div>
                                             </WizardField>
-                                            <WizardField label="Pulse Rate (bpm)" hint="Normal: 60–100 bpm">
-                                                <div className="relative">
-                                                    <Heart className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-400" />
-                                                    <input type="number" value={triage.pulse_rate} onChange={e => setTriage({ ...triage, pulse_rate: e.target.value })} placeholder="95" className={`${inputCls} pl-9`} />
-                                                </div>
+
+                                            <WizardField label="Blood Pressure (mmHg)" hint="Add one or more readings">
+                                                <MultiReadingField
+                                                    readings={triage.blood_pressure}
+                                                    onAdd={() => setTriage(t => ({ ...t, blood_pressure: [...t.blood_pressure, ''] }))}
+                                                    onRemove={idx => setTriage(t => {
+                                                        const next = [...t.blood_pressure];
+                                                        next.splice(idx, 1);
+                                                        return { ...t, blood_pressure: next };
+                                                    })}
+                                                    renderRow={(reading, idx) => (
+                                                        <BloodPressureRow
+                                                            value={reading}
+                                                            onChange={v => setTriage(t => {
+                                                                const next = [...t.blood_pressure];
+                                                                next[idx] = v;
+                                                                return { ...t, blood_pressure: next };
+                                                            })}
+                                                        />
+                                                    )}
+                                                    addLabel="Add BP reading"
+                                                />
                                             </WizardField>
+
+                                            <WizardField label="Pulse Rate (bpm)" hint="Add one or more readings">
+                                                <MultiReadingField
+                                                    readings={triage.pulse_rate}
+                                                    onAdd={() => setTriage(t => ({ ...t, pulse_rate: [...t.pulse_rate, ''] }))}
+                                                    onRemove={idx => setTriage(t => {
+                                                        const next = [...t.pulse_rate];
+                                                        next.splice(idx, 1);
+                                                        return { ...t, pulse_rate: next };
+                                                    })}
+                                                    renderRow={(reading, idx) => (
+                                                        <PulseRateRow
+                                                            value={reading}
+                                                            onChange={v => setTriage(t => {
+                                                                const next = [...t.pulse_rate];
+                                                                next[idx] = v;
+                                                                return { ...t, pulse_rate: next };
+                                                            })}
+                                                        />
+                                                    )}
+                                                    addLabel="Add pulse reading"
+                                                />
+                                            </WizardField>
+
                                             <WizardField label="O₂ Saturation (%)" hint="Normal: 95–100%">
                                                 <div className="relative">
                                                     <Wind className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
                                                     <input type="number" value={triage.oxygen_saturation} onChange={e => setTriage({ ...triage, oxygen_saturation: e.target.value })} placeholder="98" className={`${inputCls} pl-9`} />
                                                 </div>
                                             </WizardField>
-                                            <WizardField label="Blood Pressure" hint="e.g. 120/80">
-                                                <div className="relative">
-                                                    <Activity className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
-                                                    <input type="text" value={triage.blood_pressure} onChange={e => setTriage({ ...triage, blood_pressure: e.target.value })} placeholder="120/80" className={`${inputCls} pl-9`} />
-                                                </div>
+                                        </div>
+                                    </WizardCard>
+
+                                    {/* Anthropometrics + BMI */}
+                                    <WizardCard icon={<ClipboardList className="w-4 h-4 text-emerald-600" />} title="Anthropometrics & BMI" subtitle="Optional measurements" accent="teal">
+                                        <BmiCalculatorPanel
+                                            weight={triage.weight}
+                                            standingHeight={triage.standing_height}
+                                            onWeightChange={v => setTriage({ ...triage, weight: v })}
+                                            onHeightChange={v => setTriage({ ...triage, standing_height: v })}
+                                        />
+                                        <div className="grid grid-cols-2 gap-4 mt-2">
+                                            <WizardField label="Sitting Height (cm)">
+                                                <input type="number" step="0.1" value={triage.sitting_height} onChange={e => setTriage({ ...triage, sitting_height: e.target.value })} placeholder="e.g. 90" className={inputCls} />
                                             </WizardField>
-                                            <WizardField label="Respiratory Rate" hint="breaths/min, Normal: 12–20">
-                                                <div className="relative">
-                                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-400" />
-                                                    <input type="number" value={triage.respiratory_rate} onChange={e => setTriage({ ...triage, respiratory_rate: e.target.value })} placeholder="16" className={`${inputCls} pl-9`} />
-                                                </div>
+                                            <WizardField label="Waist (cm)">
+                                                <input type="number" step="0.1" value={triage.waist} onChange={e => setTriage({ ...triage, waist: e.target.value })} placeholder="e.g. 85" className={inputCls} />
+                                            </WizardField>
+                                            <WizardField label="Hip (cm)">
+                                                <input type="number" step="0.1" value={triage.hip} onChange={e => setTriage({ ...triage, hip: e.target.value })} placeholder="e.g. 95" className={inputCls} />
+                                            </WizardField>
+                                            <WizardField label="MUAC (cm)">
+                                                <input type="number" step="0.1" value={triage.muac} onChange={e => setTriage({ ...triage, muac: e.target.value })} placeholder="e.g. 28" className={inputCls} />
                                             </WizardField>
                                         </div>
                                     </WizardCard>
@@ -589,11 +686,14 @@ export function CreateVisitWizard({ isOpen, onClose, onSuccess, token, patients 
                                     <div className="divide-y divide-gray-100 dark:divide-gray-800">
                                         {[
                                             { label: 'Chief Complaint', value: triage.chief_complaint },
-                                            { label: 'Temperature', value: triage.temperature ? `${triage.temperature}°C` : null },
-                                            { label: 'Pulse Rate', value: triage.pulse_rate ? `${triage.pulse_rate} bpm` : null },
-                                            { label: 'O₂ Sat.', value: triage.oxygen_saturation ? `${triage.oxygen_saturation}%` : null },
-                                            { label: 'Blood Pressure', value: triage.blood_pressure || null },
-                                            { label: 'Resp. Rate', value: triage.respiratory_rate ? `${triage.respiratory_rate}/min` : null },
+                                            { label: 'Temperature',    value: triage.temperature?.value ? `${triage.temperature.value}°C (${triage.temperature.method})` : null },
+                                            { label: 'Pulse Rate',     value: triage.pulse_rate.length     ? triage.pulse_rate.filter(Boolean).map(v => `${v} bpm`).join(', ') : null },
+                                            { label: 'O₂ Sat.',        value: triage.oxygen_saturation ? `${triage.oxygen_saturation}%` : null },
+                                            { label: 'Blood Pressure', value: triage.blood_pressure.length ? triage.blood_pressure.filter(Boolean).join(', ') : null },
+                                            { label: 'Weight',         value: triage.weight ? `${triage.weight} kg` : null },
+                                            { label: 'Height',         value: triage.standing_height ? `${triage.standing_height} cm` : null },
+                                            { label: 'Waist / Hip',    value: (triage.waist || triage.hip) ? `${triage.waist || '—'} / ${triage.hip || '—'} cm` : null },
+                                            { label: 'MUAC',           value: triage.muac ? `${triage.muac} cm` : null },
                                         ].filter(r => r.value).map((row, i) => (
                                             <div key={i} className="flex items-center gap-3 px-5 py-2.5">
                                                 <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide w-28 flex-shrink-0">{row.label}</span>

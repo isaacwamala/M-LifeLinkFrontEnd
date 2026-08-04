@@ -31,17 +31,17 @@ function useIsDarkMode() {
 // ─── Small stat card ───────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor, loading }) {
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+        <div className="bg-white dark:bg-gray-900 rounded-2xl ring-1 ring-gray-100 dark:ring-gray-800 p-5 flex items-start gap-4 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${iconBg}`}>
                 <Icon className={`w-5 h-5 ${iconColor}`} />
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">{label}</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white leading-none">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-[0.12em] mb-1.5">{label}</p>
+                <p className="text-3xl font-black text-gray-900 dark:text-white leading-none tabular-nums">
                     {loading ? <Skeleton width={60} /> : (value ?? '—')}
                 </p>
                 {sub && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5">
                         {loading ? <Skeleton width={80} /> : sub}
                     </p>
                 )}
@@ -53,19 +53,17 @@ function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor, loading })
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 function Section({ icon: Icon, label, color, children, extra }) {
     return (
-        <section className="bg-gray-50/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 rounded-3xl p-6">
-            <div className="flex items-center gap-3 mb-5">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-                    <Icon className="w-4.5 h-4.5 text-white" />
+        <section className="bg-white dark:bg-gray-900 rounded-2xl ring-1 ring-gray-100 dark:ring-gray-800 shadow-sm overflow-hidden">
+            <div className={`flex items-center gap-3 px-6 py-4 ${color}`}>
+                <Icon className="w-5 h-5 text-white" />
+                <h2 className="text-xs font-bold text-white uppercase tracking-[0.15em]">{label}</h2>
+            </div>
+            <div className="p-6">
+                <div className="space-y-4">
+                    {children}
                 </div>
-                <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-widest">
-                    {label}
-                </h2>
+                {extra}
             </div>
-            <div className="space-y-4">
-                {children}
-            </div>
-            {extra}
         </section>
     );
 }
@@ -98,9 +96,9 @@ function StatusPill({ statusKey, count, colorMap, loading }) {
     const cls = colorMap[statusKey] ?? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
     const label = statusKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     return (
-        <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${cls}`}>
-            <span className="text-xs font-semibold">{label}</span>
-            <span className="text-sm font-bold ml-3">
+        <div className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${cls} ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
+            <span className="text-xs font-semibold leading-none">{label}</span>
+            <span className="text-sm font-black ml-2 tabular-nums">
                 {loading ? <Skeleton width={24} /> : count}
             </span>
         </div>
@@ -116,9 +114,9 @@ function CategoryPill({ category, count, loading }) {
     const cls = colors[category] ?? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
     const label = category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     return (
-        <div className={`flex items-center justify-between px-4 py-3 rounded-xl ${cls}`}>
-            <span className="text-xs font-semibold">{label}</span>
-            <span className="text-sm font-bold ml-3">
+        <div className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${cls} ring-1 ring-inset ring-black/5 dark:ring-white/5`}>
+            <span className="text-xs font-semibold leading-none">{label}</span>
+            <span className="text-sm font-black ml-2 tabular-nums">
                 {loading ? <Skeleton width={24} /> : count}
             </span>
         </div>
@@ -160,11 +158,13 @@ export default function ReceptionistDashboard() {
     // Non-receptionists see an access-denied message
     if (!isReceptionist) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-10 shadow-sm">
-                    <ShieldAlert className="w-12 h-12 text-red-400 mx-auto mb-3" />
-                    <h2 className="text-lg font-bold text-gray-800 dark:text-white">Access Denied</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">This page is restricted to receptionists.</p>
+            <div className="flex items-center justify-center min-h-[60vh] p-6">
+                <div className="text-center max-w-xs w-full">
+                    <div className="w-20 h-20 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-6 shadow-lg ring-1 ring-red-100 dark:ring-red-900/50">
+                        <ShieldAlert className="w-10 h-10 text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">Access Denied</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">This page is restricted to receptionists.</p>
                 </div>
             </div>
         );
@@ -187,27 +187,35 @@ export default function ReceptionistDashboard() {
             <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
 
                 {/* ── Page header ── */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-gray-800">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Receptionist Dashboard</h1>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Branch overview &bull;{' '}
-                            {lastFetched
-                                ? `Last refreshed ${lastFetched.toLocaleTimeString()}`
-                                : 'Loading…'}
-                        </p>
+                <div className="relative rounded-2xl overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-sky-700 to-blue-800" />
+                    <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-blue-300/10 pointer-events-none" />
+                    <div className="absolute right-20 bottom-0 w-24 h-24 rounded-full bg-sky-300/10 pointer-events-none" />
+                    <div className="relative px-7 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="inline-flex items-center gap-1.5 bg-white/10 text-xs font-semibold text-white/80 px-3 py-1 rounded-full border border-white/10">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-300 animate-pulse" />
+                                    Live Overview
+                                </span>
+                            </div>
+                            <h1 className="text-3xl font-black text-white tracking-tight">Receptionist Dashboard</h1>
+                            <p className="text-sm text-white/50 mt-1">
+                                Branch overview &bull;{' '}
+                                {lastFetched ? `Updated ${lastFetched.toLocaleTimeString()}` : 'Loading…'}
+                            </p>
+                        </div>
+                        <button
+                            onClick={fetchOverview}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold
+                                bg-white/10 hover:bg-white/20 border border-white/15 text-white
+                                transition-all duration-200 disabled:opacity-40 self-start sm:self-auto"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
                     </div>
-                    <button
-                        onClick={fetchOverview}
-                        disabled={loading}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
-                            bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-                            text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700
-                            disabled:opacity-40 transition shadow-sm self-start sm:self-auto"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </button>
                 </div>
 
                 {/* ══ VISITS ══ */}
